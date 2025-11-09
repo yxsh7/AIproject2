@@ -6,8 +6,8 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import init_db
 
-# Import routers (will create these next)
-# from app.api import auth, developers, analytics, integrations, insights
+# Import routers
+from app.api import auth, developers
 
 
 @asynccontextmanager
@@ -65,8 +65,8 @@ async def health_check():
 
 
 # Include routers
-# app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-# app.include_router(developers.router, prefix="/api/developers", tags=["Developers"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(developers.router, prefix="/api/developers", tags=["Developers"])
 # app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 # app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
 # app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
