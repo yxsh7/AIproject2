@@ -1,0 +1,343 @@
+"""Background tasks for AI analysis of code and work activities"""
+import logging
+from datetime import datetime
+from sqlalchemy.orm import Session
+
+from app.tasks.celery_app import celery_app
+from app.database import SessionLocal
+from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile
+from app.services.github_service import GitHubService
+from app.services.jira_service import JiraService
+from app.ai.agents.code_analyzer import CodeComplexityAnalyzer
+from app.ai.agents.work_classifier import WorkTypeClassifier
+
+logger = logging.getLogger(__name__)
+
+
+def get_db():
+    """Get database session for tasks"""
+    db = SessionLocal()
+    try:
+        return db
+    except Exception as e:
+        db.close()
+        raise e
+
+
+@celery_app.task(name="app.tasks.analysis_tasks.analyze_git_commits")
+def analyze_git_commits(developer_id: int, limit: int = 100):
+    """
+    Analyze unanalyzed Git commits for a developer using AI
+
+    Args:
+        developer_id: Developer profile ID
+        limit: Max number of commits to analyze
+
+    Returns:
+        Dict with analysis results
+    """
+    db = get_db()
+
+    try:
+        # Get developer
+        developer = (
+            db.query(DeveloperProfile)
+            .filter(DeveloperProfile.id == developer_id)
+            .first()
+        )
+
+        if not developer:
+            return {"error": "Developer not found"}
+
+        # Get unanalyzed commits
+        commits = (
+            db.query(GitCommit)
+            .filter(
+                GitCommit.developer_id == developer_id,
+                GitCommit.analyzed == False,
+            )
+            .order_by(GitCommit.committed_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not commits:
+            logger.info(f"No unanalyzed commits found for developer {developer_id}")
+            return {"analyzed_count": 0}
+
+        logger.info(f"Analyzing {len(commits)} commits for developer {developer.github_username}")
+
+        # Initialize AI analyzer
+        analyzer = CodeComplexityAnalyzer()
+
+        analyzed_count = 0
+        work_activities_created = 0
+
+        for commit in commits:
+            try:
+                # Get commit diff (if needed for better analysis)
+                # For now, we'll analyze without diff to save API calls
+                # diff = github_service.get_commit_diff(commit.repo_name, commit.commit_sha)
+
+                # Analyze commit
+                analysis = analyzer.analyze_commit(
+                    commit_message=commit.message,
+                    files_changed=commit.files_changed,
+                    additions=commit.additions,
+                    deletions=commit.deletions,
+                    diff=None,  # We can add diff later for better accuracy
+                )
+
+                # Save analysis result
+                commit.analysis_result = analysis
+                commit.analyzed = True
+
+                # Create work activity
+                work_activity = WorkActivity(
+                    developer_id=developer_id,
+                    activity_date=commit.committed_at.date(),
+                    work_type=WorkType(analysis["work_type"]),
+                    complexity_score=analysis["complexity_score"],
+                    impact_score=_map_impact_to_score(analysis["impact_level"]),
+                    quality_score=analysis["quality_score"],
+                    time_estimate_hours=_estimate_time_from_complexity(
+                        analysis["complexity_score"]
+                    ),
+                    source_type="git",
+                    source_id=str(commit.id),
+                    ai_analysis={
+                        "commit_sha": commit.commit_sha,
+                        "repo": commit.repo_name,
+                        "message": commit.message,
+                        **analysis,
+                    },
+                    artifacts=[
+                        {
+                            "type": "commit",
+                            "sha": commit.commit_sha,
+                            "repo": commit.repo_name,
+                            "url": f"https://github.com/{commit.repo_name}/commit/{commit.commit_sha}",
+                        }
+                    ],
+                )
+
+                db.add(work_activity)
+                work_activities_created += 1
+                analyzed_count += 1
+
+                # Commit in batches
+                if analyzed_count % 10 == 0:
+                    db.commit()
+                    logger.info(f"Analyzed {analyzed_count} commits so far...")
+
+            except Exception as e:
+                logger.error(f"Error analyzing commit {commit.id}: {e}")
+                continue
+
+        # Final commit
+        db.commit()
+
+        logger.info(
+            f"Successfully analyzed {analyzed_count} commits, "
+            f"created {work_activities_created} work activities"
+        )
+
+        return {
+            "analyzed_count": analyzed_count,
+            "work_activities_created": work_activities_created,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in analyze_git_commits: {e}")
+        return {"error": str(e)}
+
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.analysis_tasks.analyze_jira_tickets")
+def analyze_jira_tickets(developer_id: int, limit: int = 100):
+    """
+    Analyze unanalyzed Jira tickets for a developer using AI
+
+    Args:
+        developer_id: Developer profile ID
+        limit: Max number of tickets to analyze
+
+    Returns:
+        Dict with analysis results
+    """
+    db = get_db()
+
+    try:
+        # Get developer
+        developer = (
+            db.query(DeveloperProfile)
+            .filter(DeveloperProfile.id == developer_id)
+            .first()
+        )
+
+        if not developer:
+            return {"error": "Developer not found"}
+
+        # Get unanalyzed tickets
+        tickets = (
+            db.query(JiraTicket)
+            .filter(
+                JiraTicket.developer_id == developer_id,
+                JiraTicket.analyzed == False,
+            )
+            .order_by(JiraTicket.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not tickets:
+            logger.info(f"No unanalyzed tickets found for developer {developer_id}")
+            return {"analyzed_count": 0}
+
+        logger.info(f"Analyzing {len(tickets)} tickets for developer {developer.jira_username}")
+
+        # Initialize AI classifier
+        classifier = WorkTypeClassifier()
+
+        analyzed_count = 0
+        work_activities_created = 0
+
+        for ticket in tickets:
+            try:
+                # Get ticket comments
+                comments = [comment.comment_text for comment in ticket.comments]
+
+                # Classify ticket
+                classification = classifier.classify_ticket(
+                    ticket_key=ticket.ticket_key,
+                    title=ticket.title,
+                    ticket_type=ticket.ticket_type,
+                    description=ticket.description,
+                    comments=comments,
+                    status=ticket.status,
+                )
+
+                # Save classification result
+                ticket.analysis_result = classification
+                ticket.analyzed = True
+
+                # Create work activity
+                work_activity = WorkActivity(
+                    developer_id=developer_id,
+                    activity_date=ticket.created_at.date(),
+                    work_type=WorkType(classification["work_type"]),
+                    complexity_score=classification["complexity_score"],
+                    impact_score=classification["impact_score"],
+                    quality_score=7,  # Default for Jira tickets
+                    time_estimate_hours=classification["time_estimate_hours"],
+                    source_type="jira",
+                    source_id=str(ticket.id),
+                    ai_analysis={
+                        "ticket_key": ticket.ticket_key,
+                        "title": ticket.title,
+                        **classification,
+                    },
+                    artifacts=classification.get("artifacts", []),
+                )
+
+                db.add(work_activity)
+                work_activities_created += 1
+                analyzed_count += 1
+
+                # Commit in batches
+                if analyzed_count % 10 == 0:
+                    db.commit()
+                    logger.info(f"Analyzed {analyzed_count} tickets so far...")
+
+            except Exception as e:
+                logger.error(f"Error analyzing ticket {ticket.id}: {e}")
+                continue
+
+        # Final commit
+        db.commit()
+
+        logger.info(
+            f"Successfully analyzed {analyzed_count} tickets, "
+            f"created {work_activities_created} work activities"
+        )
+
+        return {
+            "analyzed_count": analyzed_count,
+            "work_activities_created": work_activities_created,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in analyze_jira_tickets: {e}")
+        return {"error": str(e)}
+
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.analysis_tasks.analyze_all_unanalyzed")
+def analyze_all_unanalyzed():
+    """
+    Periodic task to analyze all unanalyzed commits and tickets
+    """
+    db = get_db()
+
+    try:
+        # Get all developers
+        developers = db.query(DeveloperProfile).all()
+
+        logger.info(f"Running AI analysis for {len(developers)} developers")
+
+        total_commits = 0
+        total_tickets = 0
+
+        for developer in developers:
+            try:
+                # Analyze commits
+                commit_result = analyze_git_commits.delay(developer.id, limit=50)
+                total_commits += 1
+
+                # Analyze tickets
+                ticket_result = analyze_jira_tickets.delay(developer.id, limit=50)
+                total_tickets += 1
+
+            except Exception as e:
+                logger.error(f"Error triggering analysis for developer {developer.id}: {e}")
+                continue
+
+        return {
+            "developers_processed": len(developers),
+            "commit_tasks_triggered": total_commits,
+            "ticket_tasks_triggered": total_tickets,
+        }
+
+    finally:
+        db.close()
+
+
+# Helper functions
+
+
+def _map_impact_to_score(impact_level: str) -> int:
+    """Map impact level to score (0-10)"""
+    mapping = {
+        "low": 3,
+        "medium": 6,
+        "high": 9,
+        "critical": 10,
+    }
+    return mapping.get(impact_level.lower(), 5)
+
+
+def _estimate_time_from_complexity(complexity_score: int) -> int:
+    """Estimate time in hours from complexity score"""
+    # Very rough estimation
+    if complexity_score <= 3:
+        return 1
+    elif complexity_score <= 5:
+        return 2
+    elif complexity_score <= 7:
+        return 4
+    else:
+        return 8
