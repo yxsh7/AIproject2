@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    # AI Model Configuration (for cost control)
+    AI_MODEL_PROVIDER: str = "openai"  # "openai" or "anthropic"
+    AI_MODEL_NAME: str = "gpt-4o-mini"  # Cost-effective model
+    AI_MODEL_TEMPERATURE: float = 0.1
+    AI_MODEL_MAX_TOKENS: int = 1024
+
     # GitHub Integration
     GITHUB_APP_ID: str = ""
     GITHUB_APP_SECRET: str = ""

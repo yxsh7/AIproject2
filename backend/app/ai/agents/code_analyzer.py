@@ -1,8 +1,9 @@
-"""Code Complexity Analyzer Agent using Claude AI"""
+"""Code Complexity Analyzer Agent using AI (OpenAI or Anthropic)"""
 import json
 import logging
 from typing import Dict, Any, Optional
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -27,27 +28,54 @@ class CodeAnalysisResult(BaseModel):
 
 
 class CodeComplexityAnalyzer:
-    """Analyzes git commits for complexity and quality using Claude AI"""
+    """Analyzes git commits for complexity and quality using AI (OpenAI or Anthropic)"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
         """
         Initialize the Code Complexity Analyzer
 
         Args:
-            api_key: Anthropic API key (defaults to settings)
+            provider: AI provider ("openai" or "anthropic") - defaults to settings
+            model_name: Model name - defaults to settings (gpt-4o-mini recommended for cost)
+            api_key: API key - defaults to settings based on provider
         """
-        self.api_key = api_key or settings.ANTHROPIC_API_KEY
+        self.provider = provider or settings.AI_MODEL_PROVIDER
+        self.model_name = model_name or settings.AI_MODEL_NAME
 
-        if not self.api_key:
-            raise ValueError("Anthropic API key is required")
+        # Initialize the appropriate LLM
+        if self.provider == "openai":
+            api_key = api_key or settings.OPENAI_API_KEY
+            if not api_key:
+                raise ValueError("OpenAI API key is required")
 
-        # Initialize Claude model
-        self.llm = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
-            anthropic_api_key=self.api_key,
-            temperature=0.1,  # Low temperature for consistent analysis
-            max_tokens=1024,
-        )
+            self.llm = ChatOpenAI(
+                model=self.model_name,
+                openai_api_key=api_key,
+                temperature=settings.AI_MODEL_TEMPERATURE,
+                max_tokens=settings.AI_MODEL_MAX_TOKENS,
+            )
+            logger.info(f"Initialized Code Analyzer with OpenAI model: {self.model_name}")
+
+        elif self.provider == "anthropic":
+            api_key = api_key or settings.ANTHROPIC_API_KEY
+            if not api_key:
+                raise ValueError("Anthropic API key is required")
+
+            self.llm = ChatAnthropic(
+                model=self.model_name,
+                anthropic_api_key=api_key,
+                temperature=settings.AI_MODEL_TEMPERATURE,
+                max_tokens=settings.AI_MODEL_MAX_TOKENS,
+            )
+            logger.info(f"Initialized Code Analyzer with Anthropic model: {self.model_name}")
+
+        else:
+            raise ValueError(f"Unsupported AI provider: {self.provider}")
 
         # Create prompt template
         self.prompt = PromptTemplate(
@@ -96,12 +124,12 @@ class CodeComplexityAnalyzer:
                 diff=diff or "Diff not available",
             )
 
-            # Call Claude
+            # Call AI model
             response = self.llm.invoke(formatted_prompt)
             content = response.content
 
             # Parse JSON response
-            # Claude might wrap JSON in markdown code blocks
+            # AI might wrap JSON in markdown code blocks
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -110,14 +138,15 @@ class CodeComplexityAnalyzer:
             result = json.loads(content)
 
             logger.info(
-                f"Analyzed commit: complexity={result['complexity_score']}, "
+                f"[{self.provider}/{self.model_name}] Analyzed commit: "
+                f"complexity={result['complexity_score']}, "
                 f"quality={result['quality_score']}, type={result['work_type']}"
             )
 
             return result
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Claude response as JSON: {e}")
+            logger.error(f"Failed to parse {self.provider} response as JSON: {e}")
             logger.error(f"Response content: {content}")
             # Return fallback analysis
             return self._fallback_analysis(

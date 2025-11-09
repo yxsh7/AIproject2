@@ -1,8 +1,9 @@
-"""Work Type Classifier Agent using Claude AI"""
+"""Work Type Classifier Agent using AI (OpenAI or Anthropic)"""
 import json
 import logging
 from typing import Dict, Any, Optional, List
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
 from app.config import settings
 from app.ai.prompts.analysis_prompts import WORK_TYPE_CLASSIFIER_PROMPT
@@ -11,27 +12,54 @@ logger = logging.getLogger(__name__)
 
 
 class WorkTypeClassifier:
-    """Classifies Jira tickets into work types using Claude AI"""
+    """Classifies Jira tickets into work types using AI"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
         """
         Initialize the Work Type Classifier
 
         Args:
-            api_key: Anthropic API key (defaults to settings)
+            provider: AI provider ("openai" or "anthropic") - defaults to settings
+            model_name: Model name - defaults to settings (gpt-4o-mini recommended for cost)
+            api_key: API key - defaults to settings based on provider
         """
-        self.api_key = api_key or settings.ANTHROPIC_API_KEY
+        self.provider = provider or settings.AI_MODEL_PROVIDER
+        self.model_name = model_name or settings.AI_MODEL_NAME
 
-        if not self.api_key:
-            raise ValueError("Anthropic API key is required")
+        # Initialize the appropriate LLM
+        if self.provider == "openai":
+            api_key = api_key or settings.OPENAI_API_KEY
+            if not api_key:
+                raise ValueError("OpenAI API key is required")
 
-        # Initialize Claude model
-        self.llm = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
-            anthropic_api_key=self.api_key,
-            temperature=0.1,
-            max_tokens=1024,
-        )
+            self.llm = ChatOpenAI(
+                model=self.model_name,
+                openai_api_key=api_key,
+                temperature=settings.AI_MODEL_TEMPERATURE,
+                max_tokens=settings.AI_MODEL_MAX_TOKENS,
+            )
+            logger.info(f"Initialized Work Classifier with OpenAI model: {self.model_name}")
+
+        elif self.provider == "anthropic":
+            api_key = api_key or settings.ANTHROPIC_API_KEY
+            if not api_key:
+                raise ValueError("Anthropic API key is required")
+
+            self.llm = ChatAnthropic(
+                model=self.model_name,
+                anthropic_api_key=api_key,
+                temperature=settings.AI_MODEL_TEMPERATURE,
+                max_tokens=settings.AI_MODEL_MAX_TOKENS,
+            )
+            logger.info(f"Initialized Work Classifier with Anthropic model: {self.model_name}")
+
+        else:
+            raise ValueError(f"Unsupported AI provider: {self.provider}")
 
     def classify_ticket(
         self,
@@ -77,7 +105,7 @@ class WorkTypeClassifier:
                 status=status,
             )
 
-            # Call Claude
+            # Call AI model
             response = self.llm.invoke(formatted_prompt)
             content = response.content
 
@@ -90,14 +118,15 @@ class WorkTypeClassifier:
             result = json.loads(content)
 
             logger.info(
-                f"Classified ticket {ticket_key}: type={result['work_type']}, "
-                f"complexity={result['complexity_score']}, impact={result['impact_score']}"
+                f"[{self.provider}/{self.model_name}] Classified ticket {ticket_key}: "
+                f"type={result['work_type']}, complexity={result['complexity_score']}, "
+                f"impact={result['impact_score']}"
             )
 
             return result
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Claude response as JSON: {e}")
+            logger.error(f"Failed to parse {self.provider} response as JSON: {e}")
             logger.error(f"Response content: {content}")
             return self._fallback_classification(title, ticket_type, description)
 
