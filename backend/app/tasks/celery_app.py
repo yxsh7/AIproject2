@@ -29,22 +29,27 @@ celery_app.conf.update(
 )
 
 # Periodic task schedule (Celery Beat)
+# ALL AUTOMATIC TASKS DISABLED - Use manual triggers to control costs
+# You can enable specific tasks by uncommenting them below
+
 celery_app.conf.beat_schedule = {
-    # Sync GitHub every 2 hours
-    "sync-github-every-2-hours": {
-        "task": "app.tasks.sync_tasks.sync_all_github",
-        "schedule": crontab(minute=0, hour="*/2"),
-    },
-    # Sync Jira every 3 hours
-    "sync-jira-every-3-hours": {
-        "task": "app.tasks.sync_tasks.sync_all_jira",
-        "schedule": crontab(minute=0, hour="*/3"),
-    },
-    # Run AI analysis every 4 hours
-    "analyze-activities-every-4-hours": {
-        "task": "app.tasks.analysis_tasks.analyze_all_unanalyzed",
-        "schedule": crontab(minute=0, hour="*/4"),
-    },
+    # DISABLED: Sync GitHub (manual trigger only)
+    # "sync-github-every-2-hours": {
+    #     "task": "app.tasks.sync_tasks.sync_all_github",
+    #     "schedule": crontab(minute=0, hour="*/2"),
+    # },
+
+    # DISABLED: Sync Jira (manual trigger only)
+    # "sync-jira-every-3-hours": {
+    #     "task": "app.tasks.sync_tasks.sync_all_jira",
+    #     "schedule": crontab(minute=0, hour="*/3"),
+    # },
+
+    # DISABLED: AI analysis (manual trigger only - COSTS MONEY)
+    # "analyze-activities-every-4-hours": {
+    #     "task": "app.tasks.analysis_tasks.analyze_all_unanalyzed",
+    #     "schedule": crontab(minute=0, hour="*/4"),
+    # },
 }
 
 if __name__ == "__main__":

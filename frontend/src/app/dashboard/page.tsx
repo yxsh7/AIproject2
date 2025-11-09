@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [insights, setInsights] = useState<DeveloperInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [developerId, setDeveloperId] = useState<number | null>(null);
+  const [analysisRunning, setAnalysisRunning] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -69,6 +70,37 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const handleRunAnalysis = async () => {
+    if (!developerId) {
+      alert('No developer profile found');
+      return;
+    }
+
+    const confirmed = confirm(
+      '⚠️ AI Analysis Cost Warning\n\n' +
+      'This will analyze your unanalyzed commits and tickets using AI.\n' +
+      'Estimated cost: ~$0.01 per 100 items\n\n' +
+      'Continue?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setAnalysisRunning(true);
+      const response = await analyticsAPI.triggerAnalysis(developerId, 50);
+      alert(
+        `✅ AI Analysis Started!\n\n` +
+        `${response.data.message}\n` +
+        `Estimated cost: $${response.data.estimated_cost_usd}\n\n` +
+        `This may take 2-5 minutes. Refresh the page after a few minutes to see updated analytics.`
+      );
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.detail || 'Failed to trigger analysis'}`);
+    } finally {
+      setAnalysisRunning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -91,9 +123,20 @@ export default function DashboardPage() {
                 Welcome back, {user?.full_name}
               </p>
             </div>
-            <Button onClick={handleLogout} variant="outline">
-              Logout
-            </Button>
+            <div className="flex gap-2">
+              {user?.role === 'manager' || user?.role === 'admin' ? (
+                <Button
+                  onClick={handleRunAnalysis}
+                  disabled={analysisRunning || !developerId}
+                  variant="default"
+                >
+                  {analysisRunning ? 'Running AI Analysis...' : '🤖 Run AI Analysis'}
+                </Button>
+              ) : null}
+              <Button onClick={handleLogout} variant="outline">
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -113,6 +156,25 @@ export default function DashboardPage() {
                 </ul>
               </CardDescription>
             </CardHeader>
+            <CardContent>
+              {user?.role === 'manager' || user?.role === 'admin' ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      ⚠️ <strong>Cost Warning:</strong> AI analysis uses OpenAI API and costs approximately $0.01 per 100 items analyzed.
+                      Only click the button below when you have new commits/tickets to analyze.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleRunAnalysis}
+                    disabled={analysisRunning || !developerId}
+                    className="w-full"
+                  >
+                    {analysisRunning ? 'Running AI Analysis...' : '🤖 Run AI Analysis (Manual)'}
+                  </Button>
+                </div>
+              ) : null}
+            </CardContent>
           </Card>
         ) : (
           <div className="space-y-6">

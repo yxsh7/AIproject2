@@ -724,3 +724,65 @@ def get_developer_insights(
         patterns_detected=patterns_detected,
         anomalies=anomalies,
     )
+
+
+@router.post("/developers/{developer_id}/analyze")
+def trigger_ai_analysis(
+    developer_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Manually trigger AI analysis for a developer (COSTS MONEY - use sparingly)
+
+    This endpoint triggers AI analysis of unanalyzed commits and tickets.
+    Only use this when you want to analyze new data.
+
+    Args:
+        developer_id: Developer profile ID
+        limit: Maximum number of items to analyze (default: 50)
+        db: Database session
+        current_user: Current authenticated user (manager/admin only)
+
+    Returns:
+        Job IDs for the triggered analysis tasks
+
+    Raises:
+        HTTPException: If user doesn't have permission
+    """
+    # Only managers and admins can trigger AI analysis
+    if current_user.role not in ["manager", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers and admins can trigger AI analysis",
+        )
+
+    # Verify developer exists
+    developer = (
+        db.query(DeveloperProfile)
+        .filter(DeveloperProfile.id == developer_id)
+        .first()
+    )
+
+    if not developer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Developer not found",
+        )
+
+    # Import analysis tasks
+    from app.tasks.analysis_tasks import analyze_git_commits, analyze_jira_tickets
+
+    # Trigger AI analysis tasks
+    commit_job = analyze_git_commits.delay(developer_id, limit=limit)
+    ticket_job = analyze_jira_tickets.delay(developer_id, limit=limit)
+
+    return {
+        "message": f"AI analysis triggered for {developer.user.full_name if developer.user else f'developer {developer_id}'}",
+        "warning": "This will incur AI API costs (approximately $0.01 per 100 items)",
+        "commit_analysis_job_id": str(commit_job.id),
+        "ticket_analysis_job_id": str(ticket_job.id),
+        "max_items_to_analyze": limit,
+        "estimated_cost_usd": round((limit / 100) * 0.01, 4),
+    }

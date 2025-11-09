@@ -80,6 +80,10 @@ export const analyticsAPI = {
     end_date?: string;
     force_recalculate?: boolean;
   }) => api.post('/api/analytics/calculate-score', data),
+
+  // Manual AI Analysis Trigger (COSTS MONEY)
+  triggerAnalysis: (id: number, limit: number = 50) =>
+    api.post(`/api/analytics/developers/${id}/analyze`, null, { params: { limit } }),
 };
 
 export const integrationsAPI = {
