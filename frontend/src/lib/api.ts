@@ -57,25 +57,46 @@ export const developersAPI = {
 };
 
 export const analyticsAPI = {
-  team: () => api.get('/api/analytics/team'),
-  developer: (id: number) => api.get(`/api/analytics/developer/${id}`),
-  timeline: (id: number, start: string, end: string) =>
-    api.get(`/api/analytics/developer/${id}/timeline`, {
-      params: { start, end },
-    }),
+  // Developer Analytics
+  getOverview: (id: number, params?: { start_date?: string; end_date?: string }) =>
+    api.get(`/api/analytics/developers/${id}/overview`, { params }),
+  getProductivity: (id: number, params?: { start_date?: string; end_date?: string; include_comparison?: boolean }) =>
+    api.get(`/api/analytics/developers/${id}/productivity`, { params }),
+  getTrends: (id: number, periods: number = 12) =>
+    api.get(`/api/analytics/developers/${id}/trends`, { params: { periods } }),
+  getWorkBreakdown: (id: number, params?: { start_date?: string; end_date?: string; limit?: number }) =>
+    api.get(`/api/analytics/developers/${id}/work-breakdown`, { params }),
+  getInsights: (id: number, params?: { start_date?: string; end_date?: string; regenerate?: boolean }) =>
+    api.get(`/api/analytics/developers/${id}/insights`, { params }),
+
+  // Team Analytics
+  getTeamOverview: (team: string, params?: { start_date?: string; end_date?: string }) =>
+    api.get(`/api/analytics/teams/${team}/overview`, { params }),
+
+  // Score Calculation
+  calculateScore: (data: {
+    developer_id?: number;
+    start_date?: string;
+    end_date?: string;
+    force_recalculate?: boolean;
+  }) => api.post('/api/analytics/calculate-score', data),
 };
 
 export const integrationsAPI = {
   list: () => api.get('/api/integrations'),
-  configureGitHub: (data: any) => api.post('/api/integrations/github', data),
-  configureJira: (data: any) => api.post('/api/integrations/jira', data),
-  sync: (id: number) => api.post(`/api/integrations/${id}/sync`),
-};
-
-export const insightsAPI = {
-  team: () => api.get('/api/insights/team'),
-  developer: (id: number) => api.get(`/api/insights/developer/${id}`),
-  acknowledge: (id: number) => api.post(`/api/insights/${id}/acknowledge`),
+  configureGitHub: (data: { organization_name: string; access_token: string }) =>
+    api.post('/api/integrations/github', data),
+  configureJira: (data: {
+    workspace_url: string;
+    username: string;
+    api_token: string;
+    project_keys?: string[];
+  }) => api.post('/api/integrations/jira', data),
+  sync: (id: number, days_back: number = 30) =>
+    api.post(`/api/integrations/${id}/sync`, { days_back }),
+  getStatus: (id: number) => api.get(`/api/integrations/${id}/status`),
+  test: (id: number) => api.post(`/api/integrations/${id}/test`),
+  delete: (id: number) => api.delete(`/api/integrations/${id}`),
 };
 
 export default api;
