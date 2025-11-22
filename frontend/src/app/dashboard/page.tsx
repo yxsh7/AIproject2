@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useToast } from '../../components/ui/toast';
 import { Onboarding } from '../../components/onboarding';
+import { DashboardSkeleton, IntegrationsSkeleton, ProfileSkeleton } from '../../components/ui/skeleton';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -265,13 +266,50 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center animate-pulse">
-            <span className="text-white font-bold text-xl">D</span>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        {/* Header Skeleton */}
+        <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">D</span>
+                  </div>
+                  <span className="text-xl font-semibold text-white hidden sm:block">DevMetrics AI</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-slate-400">Loading your analytics...</p>
+        </header>
+
+        {/* Tab Navigation Skeleton */}
+        <div className="border-b border-slate-800 bg-slate-900/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav className="flex gap-8">
+              <div className="py-4 px-1 border-b-2 border-blue-500">
+                <div className="h-4 w-16 bg-slate-700/50 rounded animate-pulse" />
+              </div>
+              <div className="py-4 px-1 border-b-2 border-transparent">
+                <div className="h-4 w-20 bg-slate-700/50 rounded animate-pulse" />
+              </div>
+              <div className="py-4 px-1 border-b-2 border-transparent">
+                <div className="h-4 w-14 bg-slate-700/50 rounded animate-pulse" />
+              </div>
+            </nav>
+          </div>
         </div>
+
+        {/* Content Skeleton */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {activeTab === 'profile' ? (
+            <ProfileSkeleton />
+          ) : activeTab === 'integrations' ? (
+            <IntegrationsSkeleton />
+          ) : (
+            <DashboardSkeleton />
+          )}
+        </main>
       </div>
     );
   }
