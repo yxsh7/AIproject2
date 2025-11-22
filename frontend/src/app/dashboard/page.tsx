@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '../../store/auth';
-import { analyticsAPI, developersAPI } from '../../lib/api';
+import { analyticsAPI, developersAPI, integrationsAPI } from '../../lib/api';
 import {
   DeveloperAnalyticsOverview,
   DeveloperProductivity,
   DeveloperInsights,
 } from '../../types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 
 export default function DashboardPage() {
@@ -22,6 +22,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [developerId, setDeveloperId] = useState<number | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'integrations'>('overview');
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [syncStatus, setSyncStatus] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!user) {
@@ -40,24 +43,33 @@ export default function DashboardPage() {
       const devsResponse = await developersAPI.list();
       const myProfile = devsResponse.data.find((d: any) => d.user_id === user?.id);
 
-      if (!myProfile) {
-        console.error('No developer profile found');
-        setLoading(false);
-        return;
+      if (myProfile) {
+        setDeveloperId(myProfile.id);
+
+        // Fetch analytics
+        try {
+          const [overviewRes, productivityRes, insightsRes] = await Promise.all([
+            analyticsAPI.getOverview(myProfile.id),
+            analyticsAPI.getProductivity(myProfile.id, { include_comparison: true }),
+            analyticsAPI.getInsights(myProfile.id),
+          ]);
+
+          setOverview(overviewRes.data);
+          setProductivity(productivityRes.data);
+          setInsights(insightsRes.data);
+        } catch (e) {
+          console.log('Analytics not available yet');
+        }
       }
 
-      setDeveloperId(myProfile.id);
+      // Fetch integrations
+      try {
+        const intResponse = await integrationsAPI.list();
+        setIntegrations(intResponse.data);
+      } catch (e) {
+        console.log('Could not fetch integrations');
+      }
 
-      // Fetch analytics
-      const [overviewRes, productivityRes, insightsRes] = await Promise.all([
-        analyticsAPI.getOverview(myProfile.id),
-        analyticsAPI.getProductivity(myProfile.id, { include_comparison: true }),
-        analyticsAPI.getInsights(myProfile.id),
-      ]);
-
-      setOverview(overviewRes.data);
-      setProductivity(productivityRes.data);
-      setInsights(insightsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -77,7 +89,7 @@ export default function DashboardPage() {
     }
 
     const confirmed = confirm(
-      '⚠️ AI Analysis Cost Warning\n\n' +
+      'AI Analysis Cost Warning\n\n' +
       'This will analyze your unanalyzed commits and tickets using AI.\n' +
       'Estimated cost: ~$0.01 per 100 items\n\n' +
       'Continue?'
@@ -89,7 +101,7 @@ export default function DashboardPage() {
       setAnalysisRunning(true);
       const response = await analyticsAPI.triggerAnalysis(developerId, 50);
       alert(
-        `✅ AI Analysis Started!\n\n` +
+        `AI Analysis Started!\n\n` +
         `${response.data.message}\n` +
         `Estimated cost: $${response.data.estimated_cost_usd}\n\n` +
         `This may take 2-5 minutes. Refresh the page after a few minutes to see updated analytics.`
@@ -101,39 +113,78 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSync = async (integrationId: number, type: string) => {
+    setSyncStatus(prev => ({ ...prev, [integrationId]: 'syncing' }));
+    try {
+      await integrationsAPI.sync(integrationId, 30);
+      setSyncStatus(prev => ({ ...prev, [integrationId]: 'success' }));
+      setTimeout(() => {
+        setSyncStatus(prev => ({ ...prev, [integrationId]: '' }));
+      }, 3000);
+    } catch (error: any) {
+      setSyncStatus(prev => ({ ...prev, [integrationId]: 'error' }));
+      alert(`Sync failed: ${error.response?.data?.detail || 'Unknown error'}`);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading your analytics...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center animate-pulse">
+            <span className="text-white font-bold text-xl">D</span>
+          </div>
+          <p className="text-slate-400">Loading your analytics...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b">
+      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                DevMetrics AI
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Welcome back, {user?.full_name}
-              </p>
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">D</span>
+                </div>
+                <span className="text-xl font-semibold text-white hidden sm:block">DevMetrics AI</span>
+              </Link>
+              <div className="h-6 w-px bg-slate-700 hidden sm:block" />
+              <div className="hidden sm:block">
+                <p className="text-sm text-slate-400">
+                  Welcome back, <span className="text-white font-medium">{user?.full_name}</span>
+                </p>
+              </div>
             </div>
-            <div className="flex gap-2">
-              {user?.role === 'manager' || user?.role === 'admin' ? (
+            <div className="flex items-center gap-3">
+              {(user?.role === 'manager' || user?.role === 'admin') && (
                 <Button
                   onClick={handleRunAnalysis}
                   disabled={analysisRunning || !developerId}
-                  variant="default"
+                  className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white border-0"
                 >
-                  {analysisRunning ? 'Running AI Analysis...' : '🤖 Run AI Analysis'}
+                  {analysisRunning ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Analyzing...
+                    </>
+                  ) : (
+                    'Run AI Analysis'
+                  )}
                 </Button>
-              ) : null}
-              <Button onClick={handleLogout} variant="outline">
+              )}
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+              >
                 Logout
               </Button>
             </div>
@@ -141,189 +192,282 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-slate-800 bg-slate-900/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex gap-8">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'overview'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('integrations')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'integrations'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Integrations
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!productivity ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No Data Available</CardTitle>
-              <CardDescription>
-                We haven't collected enough data yet. Please ensure:
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>GitHub and Jira integrations are configured</li>
-                  <li>Data sync has been run</li>
-                  <li>AI analysis tasks have completed</li>
-                </ul>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {user?.role === 'manager' || user?.role === 'admin' ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      ⚠️ <strong>Cost Warning:</strong> AI analysis uses OpenAI API and costs approximately $0.01 per 100 items analyzed.
-                      Only click the button below when you have new commits/tickets to analyze.
+        {activeTab === 'integrations' ? (
+          /* Integrations Tab */
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">Integrations</h2>
+              <p className="text-slate-400">Manage your GitHub and Jira connections</p>
+            </div>
+
+            {integrations.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-slate-700/50 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">No Integrations Configured</h3>
+                <p className="text-slate-400 mb-6">Connect your GitHub and Jira accounts to start tracking your work.</p>
+                <p className="text-sm text-slate-500">
+                  Run the setup script: <code className="bg-slate-700 px-2 py-1 rounded">python setup_integrations.py</code>
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-6">
+                {integrations.map((integration) => (
+                  <div key={integration.id} className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                          integration.type === 'github'
+                            ? 'bg-slate-700'
+                            : 'bg-blue-600/20'
+                        }`}>
+                          {integration.type === 'github' ? (
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-6 h-6 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 005.215 5.214h2.129v2.058a5.218 5.218 0 005.215 5.214V6.758a1.001 1.001 0 00-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 005.215 5.215h2.129v2.057A5.215 5.215 0 0024 12.483V1.005A1.005 1.005 0 0023.013 0z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-white capitalize">{integration.type}</h3>
+                          <p className="text-sm text-slate-400">
+                            {integration.config?.organization_name || integration.config?.url || 'Connected'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          integration.status === 'active'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : integration.status === 'syncing'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {integration.status}
+                        </span>
+                        <Button
+                          onClick={() => handleSync(integration.id, integration.type)}
+                          disabled={syncStatus[integration.id] === 'syncing'}
+                          className="bg-slate-700 hover:bg-slate-600 text-white border-0"
+                        >
+                          {syncStatus[integration.id] === 'syncing' ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              Syncing...
+                            </>
+                          ) : syncStatus[integration.id] === 'success' ? (
+                            <>
+                              <svg className="w-4 h-4 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Synced!
+                            </>
+                          ) : (
+                            'Sync Data'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    {integration.last_sync_at && (
+                      <p className="mt-4 text-xs text-slate-500">
+                        Last synced: {new Date(integration.last_sync_at).toLocaleString()}
+                      </p>
+                    )}
+                    {integration.last_error && (
+                      <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                        <p className="text-sm text-red-400">{integration.last_error}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Overview Tab */
+          <div className="space-y-6 animate-fade-in">
+            {!productivity ? (
+              <div className="p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                <div className="text-center max-w-lg mx-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-700/50 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">No Analytics Data Yet</h2>
+                  <p className="text-slate-400 mb-6">
+                    We haven't collected enough data to show analytics. Make sure your integrations are configured and synced.
+                  </p>
+
+                  <div className="space-y-3 text-left p-4 rounded-xl bg-slate-900/50 mb-6">
+                    <p className="text-sm font-medium text-slate-300">To get started:</p>
+                    <ol className="text-sm text-slate-400 space-y-2 list-decimal list-inside">
+                      <li>Go to the Integrations tab</li>
+                      <li>Sync your GitHub and Jira data</li>
+                      <li>Run AI Analysis to process your work</li>
+                    </ol>
+                  </div>
+
+                  {(user?.role === 'manager' || user?.role === 'admin') && (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-sm text-amber-400">
+                          AI analysis uses the OpenAI API (~$0.01 per 100 items)
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleRunAnalysis}
+                        disabled={analysisRunning || !developerId}
+                        className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white"
+                      >
+                        {analysisRunning ? 'Running Analysis...' : 'Run AI Analysis'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Score Card */}
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="md:col-span-1 p-8 rounded-2xl bg-gradient-to-br from-blue-600/20 to-cyan-600/20 border border-blue-500/20">
+                    <p className="text-sm text-blue-300 mb-2">Overall Score</p>
+                    <div className="text-6xl font-bold gradient-text mb-2">
+                      {productivity.overall_score.toFixed(0)}
+                    </div>
+                    <p className="text-slate-400 text-sm">out of 100</p>
+                    <p className="text-slate-500 text-xs mt-4">
+                      {productivity.period_start} to {productivity.period_end}
                     </p>
                   </div>
-                  <Button
-                    onClick={handleRunAnalysis}
-                    disabled={analysisRunning || !developerId}
-                    className="w-full"
-                  >
-                    {analysisRunning ? 'Running AI Analysis...' : '🤖 Run AI Analysis (Manual)'}
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {/* Overall Score */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Productivity Score</CardTitle>
-                <CardDescription>
-                  {productivity.period_start} to {productivity.period_end}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      {productivity.overall_score.toFixed(1)}
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-2">
-                      out of 100
+
+                  {/* Score Breakdown */}
+                  <div className="md:col-span-2 p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">Score Breakdown</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {Object.entries(productivity.score_breakdown).map(([key, value]) => (
+                        <div key={key} className="p-4 rounded-xl bg-slate-900/50">
+                          <p className="text-xs text-slate-400 capitalize mb-1">{key}</p>
+                          <p className="text-2xl font-bold text-white">{Number(value).toFixed(1)}</p>
+                          <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                              style={{ width: `${(Number(value) / 10) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
 
-                {productivity.comparison_to_team && (
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div className="text-sm font-medium">Team Comparison</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {productivity.comparison_to_team.overall.difference > 0 ? '+' : ''}
-                      {productivity.comparison_to_team.overall.difference.toFixed(1)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      vs team average ({productivity.comparison_to_team.overall.team_average.toFixed(1)})
+                {/* Work Distribution */}
+                {overview?.work_breakdown && Object.keys(overview.work_breakdown).length > 0 && (
+                  <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">Work Distribution</h3>
+                    <div className="space-y-4">
+                      {Object.entries(overview.work_breakdown).map(([type, percentage]) => (
+                        <div key={type}>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
+                            <span className="text-white font-medium">{Number(percentage).toFixed(1)}%</span>
+                          </div>
+                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
 
-            {/* Score Breakdown */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Score Breakdown</CardTitle>
-                <CardDescription>Six dimensions of productivity</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {Object.entries(productivity.score_breakdown).map(([key, value]) => (
-                    <div key={key} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="text-sm font-medium capitalize">{key}</div>
-                      <div className="text-2xl font-bold mt-1">{value.toFixed(1)}</div>
-                      <div className="text-xs text-muted-foreground">out of 10</div>
-                      {productivity.evaluation_weights && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Weight: {(productivity.evaluation_weights[key as keyof typeof productivity.evaluation_weights] * 100).toFixed(0)}%
+                {/* Activity Summary */}
+                {overview?.activity_summary && (
+                  <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">Activity Summary</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Total Activities', value: overview.activity_summary.total_activities },
+                        { label: 'Commits', value: overview.activity_summary.total_commits },
+                        { label: 'Tickets', value: overview.activity_summary.total_tickets },
+                        { label: 'Active Days', value: overview.activity_summary.days_active },
+                      ].map((item) => (
+                        <div key={item.label} className="p-4 rounded-xl bg-slate-900/50 text-center">
+                          <p className="text-3xl font-bold text-white">{item.value}</p>
+                          <p className="text-xs text-slate-400 mt-1">{item.label}</p>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Work Breakdown */}
-            {overview?.work_breakdown && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Work Distribution</CardTitle>
-                  <CardDescription>Breakdown by work type</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {Object.entries(overview.work_breakdown).map(([type, percentage]) => (
-                      <div key={type}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="capitalize">{type.replace('_', ' ')}</span>
-                          <span className="font-medium">{percentage.toFixed(1)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* AI Insights */}
-            {insights && insights.insights.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI Insights</CardTitle>
-                  <CardDescription>Personalized recommendations</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {insights.insights.slice(0, 3).map((insight, idx) => (
-                      <div key={idx} className="p-4 border rounded-lg">
-                        <div className="font-medium">{insight.title}</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {insight.description}
-                        </div>
-                        {insight.recommendations.length > 0 && (
-                          <ul className="mt-3 space-y-1">
-                            {insight.recommendations.slice(0, 2).map((rec, ridx) => (
-                              <li key={ridx} className="text-sm flex items-start">
-                                <span className="mr-2">•</span>
-                                <span>{rec}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Activity Summary */}
-            {overview?.activity_summary && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Activity Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Total Activities</div>
-                      <div className="text-2xl font-bold">{overview.activity_summary.total_activities}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Commits</div>
-                      <div className="text-2xl font-bold">{overview.activity_summary.total_commits}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Tickets</div>
-                      <div className="text-2xl font-bold">{overview.activity_summary.total_tickets}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Active Days</div>
-                      <div className="text-2xl font-bold">{overview.activity_summary.days_active}</div>
+                      ))}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+
+                {/* AI Insights */}
+                {insights && insights.insights && insights.insights.length > 0 && (
+                  <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">AI Insights</h3>
+                    <div className="space-y-4">
+                      {insights.insights.slice(0, 3).map((insight, idx) => (
+                        <div key={idx} className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/30">
+                          <h4 className="font-medium text-white">{insight.title}</h4>
+                          <p className="text-sm text-slate-400 mt-1">{insight.description}</p>
+                          {insight.recommendations && insight.recommendations.length > 0 && (
+                            <ul className="mt-3 space-y-1">
+                              {insight.recommendations.slice(0, 2).map((rec: string, ridx: number) => (
+                                <li key={ridx} className="text-sm text-slate-300 flex items-start gap-2">
+                                  <span className="text-blue-400">•</span>
+                                  {rec}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -113,18 +113,27 @@ class GitHubService:
         try:
             # Handle both organization and personal accounts
             if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
+                try:
+                    org = self.client.get_organization(org_name)
+                    repos = list(org.get_repos())
+                except GithubException:
+                    # Fall back to user repos if org access fails
+                    logger.info(f"Could not access org {org_name}, falling back to user repos")
+                    user = self.client.get_user()
+                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
             else:
-                # Personal account - get authenticated user's repos
+                # Personal account - get ALL repos user has access to
                 user = self.client.get_user()
-                repos = user.get_repos()
+                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
+
+            logger.info(f"Found {len(repos)} repositories to scan for commits")
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             commits_synced = 0
 
             for repo in repos:
                 try:
+                    # Try multiple author formats (username and email)
                     commits = repo.get_commits(
                         author=developer.github_username, since=since_date
                     )
@@ -198,12 +207,19 @@ class GitHubService:
         try:
             # Handle both organization and personal accounts
             if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
+                try:
+                    org = self.client.get_organization(org_name)
+                    repos = list(org.get_repos())
+                except GithubException:
+                    logger.info(f"Could not access org {org_name}, falling back to user repos")
+                    user = self.client.get_user()
+                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
             else:
-                # Personal account - get authenticated user's repos
+                # Personal account - get ALL repos user has access to
                 user = self.client.get_user()
-                repos = user.get_repos()
+                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
+
+            logger.info(f"Found {len(repos)} repositories to scan for PRs")
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             prs_synced = 0
@@ -301,12 +317,19 @@ class GitHubService:
         try:
             # Handle both organization and personal accounts
             if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
+                try:
+                    org = self.client.get_organization(org_name)
+                    repos = list(org.get_repos())
+                except GithubException:
+                    logger.info(f"Could not access org {org_name}, falling back to user repos")
+                    user = self.client.get_user()
+                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
             else:
-                # Personal account - get authenticated user's repos
+                # Personal account - get ALL repos user has access to
                 user = self.client.get_user()
-                repos = user.get_repos()
+                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
+
+            logger.info(f"Found {len(repos)} repositories to scan for code reviews")
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             reviews_synced = 0
@@ -471,3 +494,70 @@ class GitHubService:
         except GithubException as e:
             logger.error(f"Error fetching PR diff for #{pr_number}: {e}")
             return None
+
+    def list_repos(self, org_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        List all accessible repositories
+
+        Args:
+            org_name: Optional organization name
+
+        Returns:
+            List of repository info dicts
+        """
+        try:
+            if org_name:
+                try:
+                    org = self.client.get_organization(org_name)
+                    repos = org.get_repos()
+                except GithubException:
+                    user = self.client.get_user()
+                    repos = user.get_repos(affiliation='owner,collaborator,organization_member')
+            else:
+                user = self.client.get_user()
+                repos = user.get_repos(affiliation='owner,collaborator,organization_member')
+
+            return [
+                {
+                    "name": repo.name,
+                    "full_name": repo.full_name,
+                    "private": repo.private,
+                    "description": repo.description,
+                    "language": repo.language,
+                    "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
+                    "url": repo.html_url,
+                }
+                for repo in repos
+            ]
+        except GithubException as e:
+            logger.error(f"Error listing repos: {e}")
+            return []
+
+    def get_connection_info(self) -> Dict[str, Any]:
+        """
+        Get connection info and authenticated user details
+
+        Returns:
+            Dict with connection status and user info
+        """
+        try:
+            user = self.client.get_user()
+            rate_limit = self.client.get_rate_limit()
+
+            return {
+                "connected": True,
+                "username": user.login,
+                "name": user.name,
+                "email": user.email,
+                "avatar_url": user.avatar_url,
+                "rate_limit": {
+                    "remaining": rate_limit.core.remaining,
+                    "limit": rate_limit.core.limit,
+                    "reset_at": rate_limit.core.reset.isoformat(),
+                },
+            }
+        except GithubException as e:
+            return {
+                "connected": False,
+                "error": str(e),
+            }
