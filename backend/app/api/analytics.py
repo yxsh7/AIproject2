@@ -24,6 +24,7 @@ from app.schemas.analytics import (
 from app.models import User, DeveloperProfile, WorkActivity, ProductivityScore
 from app.api.dependencies import get_current_active_user
 from app.services.scoring_service import ProductivityScoringService, ROLE_WEIGHTS
+from app.models import RoleLevel
 
 router = APIRouter()
 
@@ -128,12 +129,14 @@ def get_developer_overview(
         "total_tickets": sum(1 for a in activities if a.source_type == "jira"),
         "days_active": len(set(a.activity_date for a in activities)),
         "avg_complexity": round(
-            sum(a.complexity_score for a in activities) / len(activities), 2
+            sum(a.complexity_score for a in activities if a.complexity_score is not None) /
+            max(len([a for a in activities if a.complexity_score is not None]), 1), 2
         )
         if activities
         else 0,
         "avg_impact": round(
-            sum(a.impact_score for a in activities) / len(activities), 2
+            sum(a.impact_score for a in activities if a.impact_score is not None) /
+            max(len([a for a in activities if a.impact_score is not None]), 1), 2
         )
         if activities
         else 0,
@@ -226,7 +229,7 @@ def get_developer_productivity(
     }
 
     # Evaluation weights
-    weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS["mid"])
+    weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS[RoleLevel.MID])
 
     # Activity stats
     activity_stats = productivity_score.score_metadata or {}
@@ -438,9 +441,12 @@ def get_work_breakdown(
     # Complexity distribution (bins)
     complexity_bins = {"low": 0, "medium": 0, "high": 0}
     for activity in activities:
-        if activity.complexity_score <= 3:
+        score = activity.complexity_score
+        if score is None:
+            complexity_bins["medium"] += 1  # Default to medium if not scored
+        elif score <= 3:
             complexity_bins["low"] += 1
-        elif activity.complexity_score <= 7:
+        elif score <= 7:
             complexity_bins["medium"] += 1
         else:
             complexity_bins["high"] += 1
@@ -697,7 +703,7 @@ def get_developer_insights(
     patterns_detected = [
         insight["title"]
         for insight in insights_data
-        if insight["insight_type"] in ["productivity_trend", "work_preference", "consistency"]
+        if insight["insight_type"] in ["trend", "individual"]  # Updated to match InsightType values
     ]
 
     anomalies = [
@@ -707,7 +713,7 @@ def get_developer_insights(
             "severity": "high" if insight["confidence"] > 0.8 else "medium",
         }
         for insight in insights_data
-        if insight["insight_type"] in ["anomaly", "collaboration_gap"]
+        if insight["insight_type"] == "alert"  # Updated to match InsightType.ALERT
     ]
 
     # Convert to response format

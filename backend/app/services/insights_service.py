@@ -94,7 +94,7 @@ class InsightsService:
 
         if avg_recent > avg_older + 5:
             insights.append({
-                "insight_type": "productivity_trend",
+                "insight_type": "trend",  # Use InsightType.TREND
                 "title": "Strong Upward Productivity Trend",
                 "description": f"Productivity has improved by {round(avg_recent - avg_older, 1)} points over recent periods. This shows consistent growth and improvement.",
                 "confidence": 0.9,
@@ -111,7 +111,7 @@ class InsightsService:
             })
         elif avg_recent < avg_older - 5:
             insights.append({
-                "insight_type": "productivity_trend",
+                "insight_type": "trend",  # Use InsightType.TREND
                 "title": "Declining Productivity Detected",
                 "description": f"Productivity has decreased by {round(avg_older - avg_recent, 1)} points. This may indicate burnout, blockers, or changing priorities.",
                 "confidence": 0.85,
@@ -136,7 +136,7 @@ class InsightsService:
 
             if score_variance < 10:  # Low variance
                 insights.append({
-                    "insight_type": "consistency",
+                    "insight_type": "individual",  # Use InsightType.INDIVIDUAL
                     "title": "Highly Consistent Performance",
                     "description": "Productivity scores show very consistent performance with minimal variation. This indicates stable, reliable output.",
                     "confidence": 0.9,
@@ -185,7 +185,7 @@ class InsightsService:
 
             if dominant_ratio > 0.5:
                 insights.append({
-                    "insight_type": "work_preference",
+                    "insight_type": "individual",  # Use InsightType.INDIVIDUAL
                     "title": f"Strong Focus on {dominant_type.replace('_', ' ').title()}",
                     "description": f"{int(dominant_ratio * 100)}% of work is {dominant_type.replace('_', ' ')}. This shows clear specialization.",
                     "confidence": 0.85,
@@ -205,11 +205,12 @@ class InsightsService:
                 })
 
         # Analyze complexity preference
-        avg_complexity = sum(a.complexity_score for a in activities) / len(activities)
+        complexity_scores = [a.complexity_score for a in activities if a.complexity_score is not None]
+        avg_complexity = sum(complexity_scores) / len(complexity_scores) if complexity_scores else 5.0
 
         if avg_complexity >= 7:
             insights.append({
-                "insight_type": "work_preference",
+                "insight_type": "individual",  # Use InsightType.INDIVIDUAL
                 "title": "Tackles High Complexity Work",
                 "description": f"Average complexity score of {round(avg_complexity, 1)} indicates preference for challenging, complex problems.",
                 "confidence": 0.9,
@@ -224,7 +225,7 @@ class InsightsService:
             })
         elif avg_complexity <= 3:
             insights.append({
-                "insight_type": "work_preference",
+                "insight_type": "individual",  # Use InsightType.INDIVIDUAL
                 "title": "Focuses on Simpler, Well-Defined Tasks",
                 "description": f"Average complexity score of {round(avg_complexity, 1)} suggests focus on straightforward, well-scoped work.",
                 "confidence": 0.85,
@@ -266,7 +267,7 @@ class InsightsService:
         # Check for low activity (potential blocker)
         if active_days < days_in_period * 0.3:  # Less than 30% days active
             insights.append({
-                "insight_type": "anomaly",
+                "insight_type": "alert",  # Use InsightType.ALERT
                 "title": "Low Activity Detected",
                 "description": f"Only {active_days} active days out of {days_in_period} total days. This may indicate blockers, vacation, or focus on non-tracked work.",
                 "confidence": 0.7,
@@ -286,7 +287,7 @@ class InsightsService:
         activities_per_day = len(activities) / max(active_days, 1)
         if activities_per_day > 5:  # More than 5 activities per active day
             insights.append({
-                "insight_type": "anomaly",
+                "insight_type": "alert",  # Use InsightType.ALERT
                 "title": "Very High Activity Level",
                 "description": f"Averaging {round(activities_per_day, 1)} activities per day. While productivity is high, monitor for burnout risk.",
                 "confidence": 0.75,
@@ -314,7 +315,7 @@ class InsightsService:
 
         if collaboration_ratio < 0.05:  # Less than 5% collaboration
             insights.append({
-                "insight_type": "collaboration_gap",
+                "insight_type": "alert",  # Use InsightType.ALERT
                 "title": "Limited Collaboration Detected",
                 "description": f"Only {int(collaboration_ratio * 100)}% of activities involve collaboration. Increasing teamwork can improve learning and code quality.",
                 "confidence": 0.8,
@@ -420,7 +421,7 @@ class InsightsService:
         # Role-specific recommendations
         if developer.role_level.value in ["intern", "junior"]:
             insights.append({
-                "insight_type": "growth_path",
+                "insight_type": "recommendation",  # Use InsightType.RECOMMENDATION
                 "title": "Focus on Learning and Growth",
                 "description": f"As a {developer.role_level.value}, prioritize learning fundamentals and building consistent output.",
                 "confidence": 1.0,
@@ -434,7 +435,7 @@ class InsightsService:
             })
         elif developer.role_level.value in ["senior", "staff", "principal"]:
             insights.append({
-                "insight_type": "growth_path",
+                "insight_type": "recommendation",  # Use InsightType.RECOMMENDATION
                 "title": "Focus on Impact and Leadership",
                 "description": f"As a {developer.role_level.value}, maximize impact through technical leadership and mentoring.",
                 "confidence": 1.0,
