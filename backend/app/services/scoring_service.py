@@ -164,7 +164,7 @@ class ProductivityScoringService:
             lines_added=0,  # Can aggregate from commits
             lines_deleted=0,  # Can aggregate from commits
             work_breakdown=work_breakdown,
-            metadata={
+            score_metadata={
                 "role_level": developer.role_level.value,
                 "evaluation_weights": weights,
                 "activity_count": len(activities),

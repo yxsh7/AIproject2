@@ -229,7 +229,7 @@ def get_developer_productivity(
     weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS["mid"])
 
     # Activity stats
-    activity_stats = productivity_score.metadata or {}
+    activity_stats = productivity_score.score_metadata or {}
 
     # Comparison data
     comparison_to_team = None

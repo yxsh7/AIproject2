@@ -54,6 +54,7 @@ class ProductivityScore(Base):
     # Calculation metadata
     calculated_at = Column(DateTime(timezone=True), server_default=func.now())
     version = Column(String, default="1.0")  # Algorithm version
+    score_metadata = Column(JSON, nullable=True)
 
     # Relationships
     developer = relationship("DeveloperProfile", back_populates="productivity_scores")
@@ -101,7 +102,7 @@ class AIInsight(Base):
     description = Column(Text, nullable=False)
 
     # Metadata
-    metadata = Column(JSON, nullable=True)
+    supporting_data = Column(JSON, nullable=True)
     # Example: {
     #   "metric_change": -30,
     #   "time_period": "this_week",

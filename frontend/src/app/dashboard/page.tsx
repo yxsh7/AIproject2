@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/auth';
-import { analyticsAPI, developersAPI } from '@/lib/api';
+import { useAuthStore } from '../../store/auth';
+import { analyticsAPI, developersAPI } from '../../lib/api';
 import {
   DeveloperAnalyticsOverview,
   DeveloperProductivity,
   DeveloperInsights,
-} from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+} from '../../types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
 
 export default function DashboardPage() {
   const router = useRouter();

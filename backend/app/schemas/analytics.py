@@ -24,7 +24,7 @@ class ProductivityScoreResponse(BaseModel):
     lines_added: int
     lines_deleted: int
     work_breakdown: Dict[str, float]
-    metadata: Optional[Dict[str, Any]] = None
+    score_metadata: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
