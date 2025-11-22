@@ -37,12 +37,18 @@ class WorkTypeClassifier:
             if not api_key:
                 raise ValueError("OpenAI API key is required")
 
-            self.llm = ChatOpenAI(
-                model=self.model_name,
-                openai_api_key=api_key,
-                temperature=settings.AI_MODEL_TEMPERATURE,
-                max_tokens=settings.AI_MODEL_MAX_TOKENS,
-            )
+            llm_kwargs = {
+                "model": self.model_name,
+                "openai_api_key": api_key,
+                "temperature": settings.AI_MODEL_TEMPERATURE,
+                "max_tokens": settings.AI_MODEL_MAX_TOKENS,
+            }
+            
+            # Add base_url if using OpenRouter or custom endpoint
+            if settings.OPENAI_API_BASE:
+                llm_kwargs["base_url"] = settings.OPENAI_API_BASE
+            
+            self.llm = ChatOpenAI(**llm_kwargs)
             logger.info(f"Initialized Work Classifier with OpenAI model: {self.model_name}")
 
         elif self.provider == "anthropic":

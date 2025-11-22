@@ -111,8 +111,14 @@ class GitHubService:
             return 0
 
         try:
-            org = self.client.get_organization(org_name)
-            repos = org.get_repos()
+            # Handle both organization and personal accounts
+            if org_name:
+                org = self.client.get_organization(org_name)
+                repos = org.get_repos()
+            else:
+                # Personal account - get authenticated user's repos
+                user = self.client.get_user()
+                repos = user.get_repos()
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             commits_synced = 0
@@ -190,8 +196,14 @@ class GitHubService:
             return 0
 
         try:
-            org = self.client.get_organization(org_name)
-            repos = org.get_repos()
+            # Handle both organization and personal accounts
+            if org_name:
+                org = self.client.get_organization(org_name)
+                repos = org.get_repos()
+            else:
+                # Personal account - get authenticated user's repos
+                user = self.client.get_user()
+                repos = user.get_repos()
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             prs_synced = 0
@@ -287,8 +299,14 @@ class GitHubService:
             return 0
 
         try:
-            org = self.client.get_organization(org_name)
-            repos = org.get_repos()
+            # Handle both organization and personal accounts
+            if org_name:
+                org = self.client.get_organization(org_name)
+                repos = org.get_repos()
+            else:
+                # Personal account - get authenticated user's repos
+                user = self.client.get_user()
+                repos = user.get_repos()
 
             since_date = datetime.utcnow() - timedelta(days=days_back)
             reviews_synced = 0

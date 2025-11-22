@@ -137,6 +137,7 @@ class JiraService:
             max_results = 50
 
             while True:
+                # Use the v3 API endpoint as the old one is deprecated
                 response = self.client.jql(
                     jql, start=start_at, limit=max_results, fields="*all"
                 )
