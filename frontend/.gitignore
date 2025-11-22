@@ -35,3 +35,8 @@ next-env.d.ts
 # IDEs
 .vscode/
 .idea/
+
+# build logs
+build.log
+build_retry*.log
+*.log

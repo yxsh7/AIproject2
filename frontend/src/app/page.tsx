@@ -45,34 +45,38 @@ export default function Home() {
 
         {/* Status */}
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
-          <h2 className="text-2xl font-bold mb-4">Project Status</h2>
+          <h2 className="text-2xl font-bold mb-4">Project Status - v1.0.0</h2>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="font-medium">Database Models</span>
+              <span className="font-medium">Database Models (13 models)</span>
               <span className="text-green-600 font-semibold">✓ Complete</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-medium">Backend API</span>
-              <span className="text-yellow-600 font-semibold">⚡ In Progress</span>
+              <span className="font-medium">Backend API (30+ endpoints)</span>
+              <span className="text-green-600 font-semibold">✓ Complete</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-medium">AI Agents</span>
-              <span className="text-gray-400 font-semibold">⏳ Pending</span>
+              <span className="font-medium">AI Agents (GPT-4o-mini)</span>
+              <span className="text-green-600 font-semibold">✓ Complete</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Frontend Dashboard</span>
-              <span className="text-yellow-600 font-semibold">⚡ In Progress</span>
+              <span className="text-green-600 font-semibold">✓ Complete</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Cost Control (Manual triggers only)</span>
+              <span className="text-green-600 font-semibold">✓ Complete</span>
             </div>
           </div>
 
           <div className="mt-8 pt-6 border-t">
-            <h3 className="font-semibold mb-2">Quick Links</h3>
+            <h3 className="font-semibold mb-2">Get Started</h3>
             <div className="space-y-2">
-              <a href="/dashboard" className="block text-blue-600 hover:underline">
-                → Developer Dashboard (Coming Soon)
+              <a href="/login" className="block text-blue-600 hover:underline font-medium">
+                → Login / Register
               </a>
-              <a href="/manager" className="block text-blue-600 hover:underline">
-                → Manager Dashboard (Coming Soon)
+              <a href="/dashboard" className="block text-blue-600 hover:underline">
+                → Developer Dashboard
               </a>
               <a
                 href="http://localhost:8000/docs"

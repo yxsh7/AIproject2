@@ -51,6 +51,17 @@ class ProductivityScore(Base):
     #   "suggestions": ["Consider delegating more"]
     # }
 
+    # Activity counts
+    total_commits = Column(Integer, nullable=True, default=0)
+    total_prs = Column(Integer, nullable=True, default=0)
+    total_tickets = Column(Integer, nullable=True, default=0)
+    lines_added = Column(Integer, nullable=True, default=0)
+    lines_deleted = Column(Integer, nullable=True, default=0)
+
+    # Work type breakdown
+    work_breakdown = Column(JSON, nullable=True)
+    # Example: {"code": 60, "review": 25, "research": 15}
+
     # Calculation metadata
     calculated_at = Column(DateTime(timezone=True), server_default=func.now())
     version = Column(String, default="1.0")  # Algorithm version

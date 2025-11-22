@@ -151,6 +151,7 @@ class ProductivityScoringService:
             developer_id=developer_id,
             period_start=start_date,
             period_end=end_date,
+            period_type="monthly",  # Default period type
             overall_score=round(overall_score, 2),
             complexity_score=round(complexity_score, 2),
             velocity_score=round(velocity_score, 2),
@@ -158,6 +159,11 @@ class ProductivityScoringService:
             impact_score=round(impact_score, 2),
             collaboration_score=round(collaboration_score, 2),
             mentoring_score=round(mentoring_score, 2),
+            breakdown={
+                "total_activities": len(activities),
+                "work_type_distribution": work_breakdown,
+                "role_weights": weights,
+            },
             total_commits=self._count_by_source(activities, "git"),
             total_prs=0,  # Will calculate separately if needed
             total_tickets=self._count_by_source(activities, "jira"),
@@ -263,7 +269,7 @@ class ProductivityScoringService:
             1
             for a in activities
             if a.work_type
-            in [WorkType.CODE_REVIEW, WorkType.PAIR_PROGRAMMING, WorkType.DOCUMENTATION]
+            in [WorkType.CODE_REVIEW, WorkType.MENTORING, WorkType.DOCUMENTATION]
         )
 
         # Score based on collaboration frequency
@@ -300,7 +306,7 @@ class ProductivityScoringService:
             in [
                 WorkType.DOCUMENTATION,
                 WorkType.CODE_REVIEW,
-                WorkType.PAIR_PROGRAMMING,
+                WorkType.MENTORING,
             ]
         )
 
