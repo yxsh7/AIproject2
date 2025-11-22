@@ -2,137 +2,54 @@
 
 **AI-Powered Engineering Intelligence Platform**
 
-An intelligent productivity analytics platform that understands the complexity of engineering work. Not just lines of code, but real impact.
+Understand developer productivity beyond lines of code. AI-powered insights that measure real impact, complexity, and collaboration.
 
-## 🎯 What is DevMetrics AI?
-
-DevMetrics AI analyzes developer contributions across GitHub/Bitbucket and Jira using AI to provide intelligent insights on:
-- **Code complexity** - Not just LOC, but actual cognitive complexity
-- **Work type classification** - Automatically understands research, documentation, coding, etc.
-- **Multi-dimensional scoring** - Role-based evaluation across quality, impact, and collaboration
-- **AI-generated insights** - Actionable recommendations for managers and developers
-
-## 🚀 Key Features
+## Features
 
 ### For Developers
-- 📊 Personal productivity dashboard
-- 📈 Multi-dimensional score breakdown
-- 📅 Work timeline and contribution history
-- 🎯 Transparent metrics (see what your manager sees)
-- 🏆 Credit for complex work (refactoring, architecture, research)
+- Personal productivity dashboard with multi-dimensional scoring
+- Transparent metrics - see exactly what your manager sees
+- Credit for complex work (refactoring, architecture, research)
+- AI-generated growth recommendations
 
 ### For Managers
-- 👥 Team overview and individual deep dives
-- 🔍 AI-powered insights and alerts
-- 📊 Workload distribution analysis
-- 🎯 Role-based performance evaluation
-- 🚨 Burnout risk detection
+- Team overview and individual deep dives
+- AI-powered insights and burnout risk detection
+- Role-based performance evaluation (intern to principal)
+- Workload distribution analysis
 
-### For Organizations
-- 📈 Engineering efficiency metrics
-- 🎓 Skill gap analysis
-- 🔄 Continuous improvement insights
-- 📋 Data-driven performance reviews
-
-## 🏗️ Architecture
-
-### Tech Stack
-
-**Backend:**
-- FastAPI (Python 3.11+)
-- PostgreSQL + SQLAlchemy
-- Redis + Celery
-- LangChain + Claude API + OpenAI API
-- PyGithub, Atlassian API
-
-**Frontend:**
-- Next.js 14 (App Router)
-- TailwindCSS + shadcn/ui
-- Framer Motion
-- Recharts
-- Zustand + SWR
-
-**AI/ML:**
-- Claude API (Anthropic) - Code analysis
-- OpenAI API - Complementary analysis
-- LangChain - Agent orchestration
-- Custom complexity analysis
-
-## 📁 Project Structure
-
-```
-devmetrics-ai/
-├── backend/                 # FastAPI backend
-│   ├── app/
-│   │   ├── models/         # Database models
-│   │   ├── schemas/        # Pydantic schemas
-│   │   ├── api/            # API routes
-│   │   ├── services/       # Business logic
-│   │   ├── ai/             # AI agents
-│   │   └── tasks/          # Celery tasks
-│   └── requirements.txt
-│
-├── frontend/               # Next.js frontend
-│   ├── src/
-│   │   ├── app/           # Next.js app router
-│   │   ├── components/    # React components
-│   │   ├── lib/           # Utilities
-│   │   └── store/         # State management
-│   └── package.json
-│
-├── IMPLEMENTATION_PLAN.md  # Detailed technical plan
-├── PROGRESS.md            # Current progress tracker
-└── README.md              # This file
-```
-
-## 🚦 Quick Start
+## Quick Start
 
 ### Prerequisites
-
 - Python 3.11+
-- Node.js 20+
-- Docker & Docker Compose
-- GitHub account (for integration)
-- Jira account (for integration)
-- Anthropic API key
-- OpenAI API key (optional)
+- Node.js 18+
+- PostgreSQL
+- Redis (for background tasks)
 
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd AIproject2
-```
-
-### 2. Backend Setup
+### Backend Setup
 
 ```bash
 cd backend
 
-# Start PostgreSQL and Redis
-docker-compose up -d
-
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your API keys
+# Edit .env with your settings
 
 # Run database migrations
 alembic upgrade head
 
-# Start backend server
+# Start server
 uvicorn app.main:app --reload
 ```
 
-Backend will be available at http://localhost:8000
-
-### 3. Frontend Setup
+### Frontend Setup
 
 ```bash
 cd frontend
@@ -147,82 +64,64 @@ echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 npm run dev
 ```
 
-Frontend will be available at http://localhost:3000
-
-### 4. Start Celery Worker (Background Tasks)
+### Start Background Worker (Optional)
 
 ```bash
 cd backend
+# Linux/Mac:
 celery -A app.tasks worker --loglevel=info
+
+# Windows:
+celery -A app.tasks worker --loglevel=info --pool=solo
 ```
 
-## 📖 Documentation
+## Configuration
 
-- **[Implementation Plan](IMPLEMENTATION_PLAN.md)** - Detailed technical architecture and plan
-- **[Progress Tracker](PROGRESS.md)** - Current implementation status
-- **[Backend README](backend/README.md)** - Backend-specific setup and docs
-- **API Docs** - Available at http://localhost:8000/docs when backend is running
+### Required Environment Variables
 
-## 🎯 Current Status
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/devmetrics
 
-**Phase 1: Foundation** ✅
-- [x] Project structure
-- [x] Database models
-- [x] Basic backend setup
-- [x] Basic frontend setup
+# Security
+JWT_SECRET=your-secret-key
 
-**Phase 2: Core Features** 🚧 In Progress
-- [ ] GitHub integration
-- [ ] Jira integration
-- [ ] AI analysis agents
-- [ ] API endpoints
-- [ ] Authentication
+# AI Provider (choose one)
+OPENAI_API_KEY=sk-...
+# Or use OpenRouter:
+OPENAI_API_BASE=https://openrouter.ai/api/v1
 
-**Phase 3: Dashboards** 📋 Planned
-- [ ] Developer dashboard
-- [ ] Manager dashboard
-- [ ] Admin panel
+# Optional
+REDIS_URL=redis://localhost:6379
+ANTHROPIC_API_KEY=...
+```
 
-**Phase 4: Intelligence** 📋 Planned
-- [ ] Insight generation
-- [ ] Trend analysis
-- [ ] Recommendations
+### Integrations
 
-See [PROGRESS.md](PROGRESS.md) for detailed status.
+After starting the app:
+1. Login as admin
+2. Go to Dashboard > Integrations
+3. Connect GitHub with a Personal Access Token
+4. Connect Jira with API token (optional)
 
-## 🔐 Security & Privacy
+## Tech Stack
 
-- **Transparent**: Developers see exactly what managers see
-- **Secure**: Encrypted API tokens, JWT authentication
-- **Privacy-focused**: No real-time surveillance, aggregate weekly/monthly reports
-- **Developer-first**: Tool for growth, not punishment
+**Backend:** FastAPI, PostgreSQL, SQLAlchemy, Celery, LangChain
 
-## 🎨 Design Principles
+**Frontend:** Next.js 14, TailwindCSS, TypeScript
 
-1. **Multi-dimensional scoring** - No single metric defines productivity
-2. **Role-based evaluation** - Fair comparison across experience levels
-3. **AI explanations** - Every score has reasoning
-4. **Capture all work** - Code, research, documentation, mentoring
-5. **Context-aware** - Understands sprint goals, team dynamics
+**AI:** OpenAI GPT-4o-mini (or Claude via Anthropic)
 
-## 🤝 Contributing
+## API Documentation
 
-This is currently a personal project/portfolio piece. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the development roadmap.
+When the backend is running, visit:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-## 📄 License
+## License
 
-MIT License - See LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- **Anthropic Claude** - For excellent code understanding
-- **LangChain** - For agent orchestration
-- **FastAPI** - For amazing Python web framework
-- **Next.js** - For great React framework
-- **shadcn/ui** - For beautiful UI components
+MIT License
 
 ---
 
-**Built by [Yash Kamthe](https://github.com/yxsh7)** | [LinkedIn](https://linkedin.com/in/yashkamthe)
-
-*An AI Engineering Portfolio Project showcasing LLM orchestration, multi-agent systems, and full-stack development*
+Built by [Yash Kamthe](https://github.com/yxsh7)

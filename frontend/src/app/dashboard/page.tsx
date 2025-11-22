@@ -12,10 +12,13 @@ import {
 } from '../../types';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { useToast } from '../../components/ui/toast';
+import { Onboarding } from '../../components/onboarding';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { addToast } = useToast();
 
   const [overview, setOverview] = useState<DeveloperAnalyticsOverview | null>(null);
   const [productivity, setProductivity] = useState<DeveloperProductivity | null>(null);
@@ -50,6 +53,7 @@ export default function DashboardPage() {
   const [profileRoleLevel, setProfileRoleLevel] = useState('mid');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -114,7 +118,7 @@ export default function DashboardPage() {
 
   const handleRunAnalysis = async () => {
     if (!developerId) {
-      alert('No developer profile found');
+      addToast('No developer profile found', 'error');
       return;
     }
 
@@ -130,14 +134,9 @@ export default function DashboardPage() {
     try {
       setAnalysisRunning(true);
       const response = await analyticsAPI.triggerAnalysis(developerId, 50);
-      alert(
-        `AI Analysis Started!\n\n` +
-        `${response.data.message}\n` +
-        `Estimated cost: $${response.data.estimated_cost_usd}\n\n` +
-        `This may take 2-5 minutes. Refresh the page after a few minutes to see updated analytics.`
-      );
+      addToast('AI Analysis started! This may take 2-5 minutes.', 'success');
     } catch (error: any) {
-      alert(`Error: ${error.response?.data?.detail || 'Failed to trigger analysis'}`);
+      addToast(error.response?.data?.detail || 'Failed to trigger analysis', 'error');
     } finally {
       setAnalysisRunning(false);
     }
@@ -153,7 +152,7 @@ export default function DashboardPage() {
       }, 3000);
     } catch (error: any) {
       setSyncStatus(prev => ({ ...prev, [integrationId]: 'error' }));
-      alert(`Sync failed: ${error.response?.data?.detail || 'Unknown error'}`);
+      addToast(error.response?.data?.detail || 'Sync failed', 'error');
     }
   };
 
@@ -170,6 +169,7 @@ export default function DashboardPage() {
       setShowAddModal(null);
       setGithubToken('');
       setGithubOrg('');
+      addToast('GitHub connected successfully!', 'success');
       fetchData();
     } catch (error: any) {
       setIntegrationError(error.response?.data?.detail || 'Failed to add GitHub integration');
@@ -195,6 +195,7 @@ export default function DashboardPage() {
       setJiraUsername('');
       setJiraToken('');
       setJiraProjects('');
+      addToast('Jira connected successfully!', 'success');
       fetchData();
     } catch (error: any) {
       setIntegrationError(error.response?.data?.detail || 'Failed to add Jira integration');
@@ -207,12 +208,12 @@ export default function DashboardPage() {
     try {
       const response = await integrationsAPI.test(integrationId);
       if (response.data.success) {
-        alert('Connection test successful!');
+        addToast('Connection test successful!', 'success');
       } else {
-        alert(`Connection test failed: ${response.data.message}`);
+        addToast(response.data.message || 'Connection test failed', 'error');
       }
     } catch (error: any) {
-      alert(`Connection test failed: ${error.response?.data?.detail || 'Unknown error'}`);
+      addToast(error.response?.data?.detail || 'Connection test failed', 'error');
     }
   };
 
@@ -223,7 +224,7 @@ export default function DashboardPage() {
       await integrationsAPI.delete(integrationId);
       fetchData();
     } catch (error: any) {
-      alert(`Failed to delete: ${error.response?.data?.detail || 'Unknown error'}`);
+      addToast(error.response?.data?.detail || 'Failed to delete integration', 'error');
     }
   };
 
@@ -367,6 +368,18 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Onboarding for new users */}
+        {!onboardingDismissed && activeTab === 'overview' && (
+          <Onboarding
+            hasProfile={!!developerProfile}
+            hasIntegrations={integrations.length > 0}
+            hasSyncedData={!!overview?.activity_summary?.total_activities}
+            onGoToProfile={() => setActiveTab('profile')}
+            onGoToIntegrations={() => setActiveTab('integrations')}
+            onDismiss={() => setOnboardingDismissed(true)}
+          />
+        )}
+
         {activeTab === 'profile' ? (
           /* Profile Tab */
           <div className="space-y-6 animate-fade-in">
