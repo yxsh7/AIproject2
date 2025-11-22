@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [developerId, setDeveloperId] = useState<number | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'integrations'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'integrations' | 'profile'>('overview');
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [syncStatus, setSyncStatus] = useState<Record<number, string>>({});
 
@@ -41,6 +41,15 @@ export default function DashboardPage() {
   const [jiraUsername, setJiraUsername] = useState('');
   const [jiraToken, setJiraToken] = useState('');
   const [jiraProjects, setJiraProjects] = useState('');
+
+  // Profile state
+  const [developerProfile, setDeveloperProfile] = useState<any>(null);
+  const [profileGithubUsername, setProfileGithubUsername] = useState('');
+  const [profileJiraUsername, setProfileJiraUsername] = useState('');
+  const [profileTeam, setProfileTeam] = useState('');
+  const [profileRoleLevel, setProfileRoleLevel] = useState('mid');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -61,6 +70,11 @@ export default function DashboardPage() {
 
       if (myProfile) {
         setDeveloperId(myProfile.id);
+        setDeveloperProfile(myProfile);
+        setProfileGithubUsername(myProfile.github_username || '');
+        setProfileJiraUsername(myProfile.jira_username || '');
+        setProfileTeam(myProfile.team || '');
+        setProfileRoleLevel(myProfile.role_level || 'mid');
 
         // Fetch analytics
         try {
@@ -213,6 +227,41 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileMessage(null);
+
+    try {
+      if (developerProfile) {
+        // Update existing profile
+        await developersAPI.update(developerProfile.id, {
+          github_username: profileGithubUsername || null,
+          jira_username: profileJiraUsername || null,
+          team: profileTeam || null,
+          role_level: profileRoleLevel,
+        });
+      } else {
+        // Create new profile
+        await developersAPI.create({
+          github_username: profileGithubUsername || null,
+          jira_username: profileJiraUsername || null,
+          team: profileTeam || null,
+          role_level: profileRoleLevel,
+        });
+      }
+      setProfileMessage({ type: 'success', text: 'Profile saved successfully!' });
+      fetchData();
+    } catch (error: any) {
+      setProfileMessage({
+        type: 'error',
+        text: error.response?.data?.detail || 'Failed to save profile',
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -302,13 +351,127 @@ export default function DashboardPage() {
             >
               Integrations
             </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'profile'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Profile
+            </button>
           </nav>
         </div>
       </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'integrations' ? (
+        {activeTab === 'profile' ? (
+          /* Profile Tab */
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">Developer Profile</h2>
+              <p className="text-slate-400">Configure your GitHub and Jira usernames to sync your work</p>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="max-w-lg">
+              <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    GitHub Username
+                  </label>
+                  <Input
+                    type="text"
+                    value={profileGithubUsername}
+                    onChange={(e) => setProfileGithubUsername(e.target.value)}
+                    placeholder="your-github-username"
+                    className="bg-slate-900/50 border-slate-700 text-white"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Your GitHub username for syncing commits and PRs
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Jira Email/Username
+                  </label>
+                  <Input
+                    type="text"
+                    value={profileJiraUsername}
+                    onChange={(e) => setProfileJiraUsername(e.target.value)}
+                    placeholder="you@company.com"
+                    className="bg-slate-900/50 border-slate-700 text-white"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Your Jira email address for syncing tickets
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Team
+                  </label>
+                  <Input
+                    type="text"
+                    value={profileTeam}
+                    onChange={(e) => setProfileTeam(e.target.value)}
+                    placeholder="Engineering, Platform, etc."
+                    className="bg-slate-900/50 border-slate-700 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Role Level
+                  </label>
+                  <select
+                    value={profileRoleLevel}
+                    onChange={(e) => setProfileRoleLevel(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="intern">Intern</option>
+                    <option value="junior">Junior</option>
+                    <option value="mid">Mid-Level</option>
+                    <option value="senior">Senior</option>
+                    <option value="staff">Staff</option>
+                    <option value="principal">Principal</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Your role level affects how productivity is evaluated
+                  </p>
+                </div>
+
+                {profileMessage && (
+                  <div className={`p-3 rounded-lg text-sm ${
+                    profileMessage.type === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                  }`}>
+                    {profileMessage.text}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white"
+                >
+                  {savingProfile ? 'Saving...' : developerProfile ? 'Update Profile' : 'Create Profile'}
+                </Button>
+              </div>
+            </form>
+
+            {!developerProfile && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 max-w-lg">
+                <p className="text-sm text-amber-400">
+                  You need to create a developer profile to start tracking your work and see analytics.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'integrations' ? (
           /* Integrations Tab */
           <div className="space-y-6 animate-fade-in">
             <div>

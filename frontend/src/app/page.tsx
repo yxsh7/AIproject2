@@ -71,14 +71,12 @@ export default function Home() {
             >
               Start Analyzing
             </Link>
-            <a
-              href="http://localhost:8000/docs"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/login"
               className="px-8 py-4 bg-slate-800/50 hover:bg-slate-700/50 text-white rounded-xl font-semibold text-lg border border-slate-700/50 transition-all"
             >
-              View API Docs
-            </a>
+              Learn More
+            </Link>
           </div>
         </div>
 
@@ -121,34 +119,26 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Status Section */}
+        {/* How It Works Section */}
         <div className="max-w-3xl mx-auto animate-slide-up">
           <div className="p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 backdrop-blur-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-              <h2 className="text-2xl font-bold text-white">System Status - v1.0.0</h2>
-            </div>
+            <h2 className="text-2xl font-bold text-white mb-6 text-center">How It Works</h2>
 
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
+            <div className="space-y-4 mb-8">
               {[
-                { name: 'Database Models', count: '13 models' },
-                { name: 'Backend API', count: '30+ endpoints' },
-                { name: 'AI Agents', count: 'GPT-4o-mini' },
-                { name: 'Frontend Dashboard', count: 'Dark Mode' },
-                { name: 'GitHub Integration', count: 'Full sync' },
-                { name: 'Jira Integration', count: 'Full sync' },
+                { step: '1', title: 'Connect Your Tools', desc: 'Link your GitHub and Jira accounts securely' },
+                { step: '2', title: 'Sync Your Data', desc: 'Pull commits, PRs, and tickets automatically' },
+                { step: '3', title: 'AI Analysis', desc: 'Our AI analyzes complexity, impact, and patterns' },
+                { step: '4', title: 'Get Insights', desc: 'View personalized scores and recommendations' },
               ].map((item) => (
-                <div key={item.name} className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-slate-700/30">
-                  <div>
-                    <span className="text-white font-medium">{item.name}</span>
-                    <span className="text-slate-500 text-sm ml-2">({item.count})</span>
+                <div key={item.step} className="flex items-start gap-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/30">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center shrink-0">
+                    <span className="text-blue-400 font-bold">{item.step}</span>
                   </div>
-                  <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Complete
-                  </span>
+                  <div>
+                    <h3 className="text-white font-medium">{item.title}</h3>
+                    <p className="text-slate-400 text-sm">{item.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -158,13 +148,13 @@ export default function Home() {
                 href="/login"
                 className="flex-1 md:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium text-center transition-all"
               >
-                Login / Register
+                Get Started Free
               </Link>
               <Link
-                href="/dashboard"
+                href="/login"
                 className="flex-1 md:flex-none px-6 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-white rounded-xl font-medium text-center transition-all border border-slate-600/50"
               >
-                View Dashboard
+                Sign In
               </Link>
             </div>
           </div>
@@ -173,7 +163,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="mt-24 text-center">
           <p className="text-slate-500">
-            Built with FastAPI, Next.js, LangChain, and Claude AI
+            DevMetrics AI - Engineering Intelligence Platform
           </p>
         </footer>
       </div>
