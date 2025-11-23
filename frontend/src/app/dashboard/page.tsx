@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '../../store/auth';
@@ -15,6 +15,7 @@ import { Input } from '../../components/ui/input';
 import { useToast } from '../../components/ui/toast';
 import { Onboarding } from '../../components/onboarding';
 import { DashboardSkeleton, IntegrationsSkeleton, ProfileSkeleton } from '../../components/ui/skeleton';
+import { BarChart, DonutChart, ProgressRing } from '../../components/ui/charts';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -55,6 +56,9 @@ export default function DashboardPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -64,6 +68,67 @@ export default function DashboardPage() {
 
     fetchData();
   }, [user]);
+
+  // Real-time polling for sync status updates
+  useEffect(() => {
+    const hasActiveSyncs = Object.values(syncStatus).includes('syncing');
+
+    if (hasActiveSyncs) {
+      // Poll every 3 seconds when syncing
+      pollingRef.current = setInterval(async () => {
+        try {
+          const intResponse = await integrationsAPI.list();
+          setIntegrations(intResponse.data);
+
+          // Check if any syncs completed
+          const stillSyncing = intResponse.data.some((i: any) => i.status === 'syncing');
+          if (!stillSyncing && hasActiveSyncs) {
+            // Sync completed - refresh analytics
+            addToast('Sync completed! Refreshing data...', 'success');
+            fetchData();
+          }
+        } catch (e) {
+          console.log('Polling error:', e);
+        }
+      }, 3000);
+    }
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [syncStatus]);
+
+  // Auto-refresh analytics every 60 seconds when on overview tab
+  useEffect(() => {
+    if (!autoRefresh || activeTab !== 'overview' || !developerId) return;
+
+    const refreshInterval = setInterval(() => {
+      refreshAnalytics();
+    }, 60000);
+
+    return () => clearInterval(refreshInterval);
+  }, [autoRefresh, activeTab, developerId]);
+
+  const refreshAnalytics = useCallback(async () => {
+    if (!developerId) return;
+
+    try {
+      const [overviewRes, productivityRes, insightsRes] = await Promise.all([
+        analyticsAPI.getOverview(developerId),
+        analyticsAPI.getProductivity(developerId, { include_comparison: true }),
+        analyticsAPI.getInsights(developerId),
+      ]);
+
+      setOverview(overviewRes.data);
+      setProductivity(productivityRes.data);
+      setInsights(insightsRes.data);
+      setLastRefresh(new Date());
+    } catch (e) {
+      console.log('Failed to refresh analytics');
+    }
+  }, [developerId]);
 
   const fetchData = async () => {
     try {
@@ -710,33 +775,75 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
+                {/* Refresh Status Bar */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30 border border-slate-700/50">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                    <span className="text-sm text-slate-400">
+                      {lastRefresh
+                        ? `Last updated: ${lastRefresh.toLocaleTimeString()}`
+                        : 'Auto-refresh enabled'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setAutoRefresh(!autoRefresh)}
+                      className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                        autoRefresh
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-slate-700 text-slate-400'
+                      }`}
+                    >
+                      {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+                    </button>
+                    <button
+                      onClick={refreshAnalytics}
+                      className="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
                 {/* Score Card */}
                 <div className="grid md:grid-cols-3 gap-6">
                   <div className="md:col-span-1 p-8 rounded-2xl bg-gradient-to-br from-blue-600/20 to-cyan-600/20 border border-blue-500/20">
-                    <p className="text-sm text-blue-300 mb-2">Overall Score</p>
-                    <div className="text-6xl font-bold gradient-text mb-2">
-                      {productivity.overall_score.toFixed(0)}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-blue-300 mb-2">Overall Score</p>
+                        <div className="text-5xl font-bold gradient-text mb-2">
+                          {productivity.overall_score.toFixed(0)}
+                        </div>
+                        <p className="text-slate-400 text-sm">out of 100</p>
+                      </div>
+                      <ProgressRing value={productivity.overall_score} max={100} size={90} />
                     </div>
-                    <p className="text-slate-400 text-sm">out of 100</p>
                     <p className="text-slate-500 text-xs mt-4">
                       {productivity.period_start} to {productivity.period_end}
                     </p>
                   </div>
 
-                  {/* Score Breakdown */}
+                  {/* Score Breakdown with Chart */}
                   <div className="md:col-span-2 p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
                     <h3 className="text-lg font-semibold text-white mb-4">Score Breakdown</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="mb-6">
+                      <BarChart
+                        data={Object.entries(productivity.score_breakdown).map(([key, value]) => ({
+                          label: key.charAt(0).toUpperCase() + key.slice(1),
+                          value: Number(value),
+                        }))}
+                        maxValue={10}
+                        height={160}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {Object.entries(productivity.score_breakdown).map(([key, value]) => (
-                        <div key={key} className="p-4 rounded-xl bg-slate-900/50">
-                          <p className="text-xs text-slate-400 capitalize mb-1">{key}</p>
-                          <p className="text-2xl font-bold text-white">{Number(value).toFixed(1)}</p>
-                          <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
-                              style={{ width: `${(Number(value) / 10) * 100}%` }}
-                            />
-                          </div>
+                        <div key={key} className="p-3 rounded-lg bg-slate-900/50 text-center">
+                          <p className="text-xs text-slate-400 capitalize">{key}</p>
+                          <p className="text-xl font-bold text-white">{Number(value).toFixed(1)}</p>
                         </div>
                       ))}
                     </div>
@@ -747,21 +854,45 @@ export default function DashboardPage() {
                 {overview?.work_breakdown && Object.keys(overview.work_breakdown).length > 0 && (
                   <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
                     <h3 className="text-lg font-semibold text-white mb-4">Work Distribution</h3>
-                    <div className="space-y-4">
-                      {Object.entries(overview.work_breakdown).map(([type, percentage]) => (
-                        <div key={type}>
-                          <div className="flex justify-between text-sm mb-2">
-                            <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
-                            <span className="text-white font-medium">{Number(percentage).toFixed(1)}%</span>
-                          </div>
-                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex flex-col md:flex-row items-center gap-8">
+                      {/* Donut Chart */}
+                      <div className="flex-shrink-0">
+                        <DonutChart
+                          data={Object.entries(overview.work_breakdown).map(([type, percentage], idx) => ({
+                            label: type.replace('_', ' '),
+                            value: Number(percentage),
+                            color: ['#3b82f6', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'][idx % 6],
+                          }))}
+                          size={140}
+                          thickness={24}
+                        />
+                      </div>
+                      {/* Legend & Bars */}
+                      <div className="flex-1 w-full space-y-3">
+                        {Object.entries(overview.work_breakdown).map(([type, percentage], idx) => {
+                          const colors = ['#3b82f6', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+                          return (
+                            <div key={type}>
+                              <div className="flex justify-between text-sm mb-1">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: colors[idx % 6] }}
+                                  />
+                                  <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
+                                </div>
+                                <span className="text-white font-medium">{Number(percentage).toFixed(1)}%</span>
+                              </div>
+                              <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${percentage}%`, backgroundColor: colors[idx % 6] }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
