@@ -4,6 +4,7 @@ import logging
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
 from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile, CodeReview
+from app.models.slack_activity import SlackMessage
 from app.ai.agents.code_analyzer import CodeComplexityAnalyzer
 from app.ai.agents.work_classifier import WorkTypeClassifier
 from app.ai.agents.review_quality_analyzer import ReviewQualityAnalyzer
@@ -416,6 +417,103 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
         db.close()
 
 
+@celery_app.task(name="app.tasks.analysis_tasks.analyze_slack_messages")
+def analyze_slack_messages(developer_id: int, limit: int = 200):
+    """
+    Convert unanalyzed Slack messages to WorkActivity records.
+
+    Classifies messages by content signals: code blocks → CODE_REVIEW,
+    high reply count → MENTORING, otherwise OTHER.
+    Uses message_ts as source_id for dedup.
+
+    Args:
+        developer_id: Developer profile ID
+        limit: Max number of messages to analyze
+
+    Returns:
+        Dict with analyzed_count
+    """
+    db = get_db()
+
+    try:
+        developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+        if not developer:
+            return {"error": "Developer not found"}
+
+        messages = (
+            db.query(SlackMessage)
+            .filter(
+                SlackMessage.developer_id == developer_id,
+                SlackMessage.analyzed == 0,
+            )
+            .order_by(SlackMessage.message_date.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not messages:
+            return {"analyzed_count": 0}
+
+        analyzed_count = 0
+
+        for msg in messages:
+            try:
+                # Classify work type based on content signals
+                if msg.has_code_block:
+                    work_type = WorkType.CODE_REVIEW
+                elif msg.reply_count > 2:
+                    work_type = WorkType.MENTORING
+                else:
+                    work_type = WorkType.OTHER
+
+                # Dedup check
+                existing = db.query(WorkActivity).filter_by(
+                    developer_id=developer_id,
+                    source_type="slack",
+                    source_id=msg.message_ts,
+                ).first()
+
+                if not existing:
+                    work_activity = WorkActivity(
+                        developer_id=developer_id,
+                        activity_date=msg.message_date,
+                        work_type=work_type,
+                        complexity_score=2,
+                        impact_score=3 if msg.reaction_count > 0 else 1,
+                        quality_score=5,
+                        time_estimate_hours=0,
+                        source_type="slack",
+                        source_id=msg.message_ts,
+                        ai_analysis={
+                            "channel": msg.channel_name,
+                            "has_code_block": bool(msg.has_code_block),
+                            "reply_count": msg.reply_count,
+                            "reaction_count": msg.reaction_count,
+                        },
+                        artifacts=[],
+                    )
+                    db.add(work_activity)
+
+                msg.analyzed = 1
+                analyzed_count += 1
+
+                if analyzed_count % 20 == 0:
+                    db.commit()
+
+            except Exception as e:
+                logger.error(f"Error analyzing slack message {msg.id}: {e}")
+                continue
+
+        db.commit()
+        return {"analyzed_count": analyzed_count}
+
+    except Exception as e:
+        logger.error(f"Error in analyze_slack_messages: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.analysis_tasks.analyze_all_unanalyzed")
 def analyze_all_unanalyzed():
     """
@@ -444,6 +542,9 @@ def analyze_all_unanalyzed():
 
                 # Analyze code reviews
                 analyze_code_reviews.delay(developer.id, limit=50)
+
+                # Analyze Slack messages
+                analyze_slack_messages.delay(developer.id, limit=100)
 
             except Exception as e:
                 logger.error(f"Error triggering analysis for developer {developer.id}: {e}")

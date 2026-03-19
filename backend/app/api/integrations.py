@@ -7,6 +7,7 @@ from app.database import get_db
 from app.schemas.integration import (
     GitHubIntegrationCreate,
     JiraIntegrationCreate,
+    SlackIntegrationCreate,
     IntegrationResponse,
     IntegrationSyncRequest,
     IntegrationSyncResponse,
@@ -17,6 +18,7 @@ from app.models import IntegrationConfig, IntegrationType, IntegrationStatus, Us
 from app.api.dependencies import get_current_active_user
 from app.services.github_service import GitHubService
 from app.services.jira_service import JiraService
+from app.services.slack_service import SlackService
 
 router = APIRouter()
 
@@ -193,6 +195,53 @@ def create_jira_integration(
     return integration
 
 
+@router.post("/slack", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
+def create_slack_integration(
+    integration_data: SlackIntegrationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Configure Slack integration (Admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can configure integrations")
+
+    organization_id = current_user.organization_id or 1
+
+    try:
+        slack_service = SlackService(bot_token=integration_data.bot_token)
+        if not slack_service.test_connection():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to connect to Slack. Please check your bot token.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Slack connection error: {str(e)}")
+
+    existing = (
+        db.query(IntegrationConfig)
+        .filter(
+            IntegrationConfig.organization_id == organization_id,
+            IntegrationConfig.type == IntegrationType.SLACK,
+        )
+        .first()
+    )
+
+    if existing:
+        existing.config = {"bot_token": integration_data.bot_token, "channel_ids": integration_data.channel_ids}
+        existing.status = IntegrationStatus.ACTIVE
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    integration = IntegrationConfig(
+        organization_id=organization_id,
+        type=IntegrationType.SLACK,
+        status=IntegrationStatus.ACTIVE,
+        config={"bot_token": integration_data.bot_token, "channel_ids": integration_data.channel_ids},
+    )
+    db.add(integration)
+    db.commit()
+    db.refresh(integration)
+    return integration
+
+
 @router.get("/", response_model=List[IntegrationResponse])
 def list_integrations(
     db: Session = Depends(get_db),
@@ -365,6 +414,11 @@ def test_integration(
             service = JiraService.from_integration_config(integration)
             success = service.test_connection()
             message = "Jira connection successful" if success else "Jira connection failed"
+
+        elif integration.type == IntegrationType.SLACK:
+            service = SlackService.from_integration_config(integration)
+            success = service.test_connection()
+            message = "Slack connection successful" if success else "Slack connection failed"
 
         else:
             raise HTTPException(

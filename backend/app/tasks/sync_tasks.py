@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.services.github_service import GitHubService
 from app.services.jira_service import JiraService
+from app.services.slack_service import SlackService
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,8 @@ def sync_integration_task(integration_id: int, days_back: int = 30):
             result = sync_github_integration(db, integration, days_back)
         elif integration.type == IntegrationType.JIRA:
             result = sync_jira_integration(db, integration, days_back)
+        elif integration.type == IntegrationType.SLACK:
+            result = sync_slack_integration(db, integration, days_back)
         else:
             result = {"error": f"Unsupported integration type: {integration.type}"}
 
@@ -229,6 +232,50 @@ def sync_jira_integration(
         return {"error": str(e)}
 
 
+def sync_slack_integration(
+    db: Session, integration: IntegrationConfig, days_back: int
+) -> dict:
+    """Sync Slack data for all developers with slack_user_id set."""
+    try:
+        slack_service = SlackService.from_integration_config(integration)
+        channel_ids = integration.config.get("channel_ids", [])
+
+        developers = (
+            db.query(DeveloperProfile)
+            .filter(
+                DeveloperProfile.organization_id == integration.organization_id,
+                DeveloperProfile.slack_user_id.isnot(None),
+            )
+            .all()
+        )
+
+        logger.info(f"Syncing Slack for {len(developers)} developers")
+
+        total_messages = 0
+        total_reactions = 0
+
+        for developer in developers:
+            try:
+                result = slack_service.sync_all_for_developer(
+                    db, developer.id, developer.slack_user_id, channel_ids, days_back
+                )
+                total_messages += result.get("messages", 0)
+                total_reactions += result.get("reactions", 0)
+            except Exception as e:
+                logger.error(f"Error syncing Slack for developer {developer.id}: {e}")
+                continue
+
+        return {
+            "developers_synced": len(developers),
+            "total_messages": total_messages,
+            "total_reactions": total_reactions,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in Slack sync: {e}")
+        return {"error": str(e)}
+
+
 @celery_app.task(name="app.tasks.sync_tasks.sync_all_github")
 def sync_all_github():
     """
@@ -301,6 +348,40 @@ def sync_all_jira():
 
             except Exception as e:
                 logger.error(f"Error syncing Jira integration {integration.id}: {e}")
+                results.append({"integration_id": integration.id, "error": str(e)})
+
+        return {"integrations_synced": len(integrations), "results": results}
+
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.sync_tasks.sync_all_slack")
+def sync_all_slack():
+    """Periodic task to sync all Slack integrations."""
+    db = get_db()
+
+    try:
+        integrations = (
+            db.query(IntegrationConfig)
+            .filter(
+                IntegrationConfig.type == IntegrationType.SLACK,
+                IntegrationConfig.status == IntegrationStatus.ACTIVE,
+            )
+            .all()
+        )
+
+        logger.info(f"Found {len(integrations)} active Slack integrations to sync")
+
+        results = []
+        for integration in integrations:
+            try:
+                result = sync_slack_integration(db, integration, days_back=7)
+                integration.last_sync_at = datetime.utcnow()
+                db.commit()
+                results.append({"integration_id": integration.id, "result": result})
+            except Exception as e:
+                logger.error(f"Error syncing Slack integration {integration.id}: {e}")
                 results.append({"integration_id": integration.id, "error": str(e)})
 
         return {"integrations_synced": len(integrations), "results": results}

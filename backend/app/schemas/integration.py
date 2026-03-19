@@ -20,6 +20,13 @@ class JiraIntegrationCreate(BaseModel):
     project_keys: Optional[list[str]] = Field(default=None, description="List of Jira project keys to sync")
 
 
+class SlackIntegrationCreate(BaseModel):
+    """Schema for creating Slack integration"""
+
+    bot_token: str = Field(..., description="Slack bot token (xoxb-...)")
+    channel_ids: list[str] = Field(..., description="List of Slack channel IDs to monitor")
+
+
 class IntegrationResponse(BaseModel):
     """Schema for integration response"""
 
