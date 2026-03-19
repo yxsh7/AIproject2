@@ -50,7 +50,7 @@ def create_github_integration(
 
     # For now, we'll assume organization_id = 1
     # In production, you'd get this from the user's profile
-    organization_id = 1
+    organization_id = current_user.organization_id or 1
 
     # Test the connection first
     try:
@@ -132,7 +132,7 @@ def create_jira_integration(
             detail="Only admins can configure integrations",
         )
 
-    organization_id = 1
+    organization_id = current_user.organization_id or 1
 
     # Test the connection first
     try:
@@ -210,7 +210,7 @@ def list_integrations(
     Returns:
         List of integrations
     """
-    organization_id = 1
+    organization_id = current_user.organization_id or 1
 
     integrations = (
         db.query(IntegrationConfig)

@@ -41,6 +41,7 @@ class AuthService:
         password: str,
         full_name: str,
         role: str = "developer",
+        organization_id: int = 1,
     ) -> User:
         """
         Create a new user
@@ -51,20 +52,20 @@ class AuthService:
             password: Plain text password
             full_name: User's full name
             role: User role (admin, manager, developer)
+            organization_id: Organization ID (defaults to 1)
 
         Returns:
             Created User object
         """
-        # Hash the password
         hashed_password = get_password_hash(password)
 
-        # Create user
         user = User(
             email=email,
             hashed_password=hashed_password,
             full_name=full_name,
             role=role,
             is_active=1,
+            organization_id=organization_id,
         )
 
         db.add(user)
