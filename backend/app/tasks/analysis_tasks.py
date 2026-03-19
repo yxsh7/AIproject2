@@ -1,7 +1,5 @@
 """Background tasks for AI analysis of code and work activities"""
 import logging
-from datetime import datetime
-from sqlalchemy.orm import Session
 
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
@@ -40,11 +38,7 @@ def _safe_work_type(work_type_str: str) -> WorkType:
 def get_db():
     """Get database session for tasks"""
     db = SessionLocal()
-    try:
-        return db
-    except Exception as e:
-        db.close()
-        raise e
+    return db
 
 
 @celery_app.task(name="app.tasks.analysis_tasks.analyze_git_commits")
@@ -98,23 +92,6 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
         for commit in commits:
             try:
-                # Get commit diff (if needed for better analysis)
-                # For now, we'll analyze without diff to save API calls
-                # diff = github_service.get_commit_diff(commit.repo_name, commit.commit_sha)
-
-                # Analyze commit
-                analysis = analyzer.analyze_commit(
-                    commit_message=commit.message,
-                    files_changed=commit.files_changed,
-                    additions=commit.additions,
-                    deletions=commit.deletions,
-                    diff=None,  # We can add diff later for better accuracy
-                )
-
-                # Save analysis result
-                commit.analysis_result = analysis
-                commit.analyzed = True
-
                 # Dedup: skip if WorkActivity already exists for this source
                 existing = db.query(WorkActivity).filter_by(
                     developer_id=developer_id,
@@ -122,9 +99,21 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                     source_id=str(commit.id),
                 ).first()
                 if existing:
-                    # Still mark as analyzed to avoid re-processing
                     commit.analyzed = True
                     continue
+
+                # Analyze commit
+                analysis = analyzer.analyze_commit(
+                    commit_message=commit.message,
+                    files_changed=commit.files_changed,
+                    additions=commit.additions,
+                    deletions=commit.deletions,
+                    diff=None,
+                )
+
+                # Save analysis result
+                commit.analysis_result = analysis
+                commit.analyzed = True
 
                 # Create work activity
                 # support both old "impact_level" and new "impact" key names
@@ -242,6 +231,16 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
         for ticket in tickets:
             try:
+                # Dedup: skip if WorkActivity already exists for this source
+                existing = db.query(WorkActivity).filter_by(
+                    developer_id=developer_id,
+                    source_type="jira",
+                    source_id=str(ticket.id),
+                ).first()
+                if existing:
+                    ticket.analyzed = True
+                    continue
+
                 # Get ticket comments
                 comments = [comment.comment_text for comment in ticket.comments]
 
@@ -258,16 +257,6 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                 # Save classification result
                 ticket.analysis_result = classification
                 ticket.analyzed = True
-
-                # Dedup: skip if WorkActivity already exists for this source
-                existing = db.query(WorkActivity).filter_by(
-                    developer_id=developer_id,
-                    source_type="jira",
-                    source_id=str(ticket.id),
-                ).first()
-                if existing:
-                    ticket.analyzed = True
-                    continue
 
                 # Create work activity
                 work_activity = WorkActivity(
