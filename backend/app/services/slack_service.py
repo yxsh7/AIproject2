@@ -60,6 +60,7 @@ class SlackService:
 
         for channel_id in channel_ids:
             try:
+                channel_name = self._get_channel_name(channel_id)  # ONE call per channel
                 cursor = None
                 while True:
                     kwargs = {
@@ -96,9 +97,6 @@ class SlackService:
                         reaction_count = sum(r.get("count", 0) for r in reactions)
 
                         msg_dt = datetime.fromtimestamp(float(message_ts))
-
-                        # Get channel name (best effort)
-                        channel_name = self._get_channel_name(channel_id)
 
                         slack_msg = SlackMessage(
                             developer_id=developer_id,
@@ -141,49 +139,62 @@ class SlackService:
 
         synced = 0
         try:
-            # reactions.list returns all reactions the user has given
-            response = self.client.reactions_list(user=slack_user_id, limit=200)
-            items = response.get("items", [])
+            cursor = None
+            while True:
+                kwargs = {"user": slack_user_id, "limit": 200}
+                if cursor:
+                    kwargs["cursor"] = cursor
 
-            since_dt = datetime.utcnow() - timedelta(days=days_back)
+                response = self.client.reactions_list(**kwargs)
+                items = response.get("items", [])
 
-            for item in items:
-                message = item.get("message", {})
-                reactions = message.get("reactions", [])
+                since_dt = datetime.utcnow() - timedelta(days=days_back)
 
-                for reaction in reactions:
-                    if slack_user_id not in reaction.get("users", []):
-                        continue
+                for item in items:
+                    message = item.get("message", {})
+                    reactions = message.get("reactions", [])
 
-                    msg_ts = message.get("ts", "")
-                    if not msg_ts:
-                        continue
+                    for reaction in reactions:
+                        if slack_user_id not in reaction.get("users", []):
+                            continue
 
-                    reaction_dt = datetime.fromtimestamp(float(msg_ts))
-                    if reaction_dt < since_dt:
-                        continue
+                        msg_ts = message.get("ts", "")
+                        if not msg_ts:
+                            continue
 
-                    reaction_name = reaction.get("name", "")
-                    target_user = message.get("user", "")
+                        reaction_dt = datetime.fromtimestamp(float(msg_ts))
+                        # NOTE: Slack API returns message timestamp, not reaction timestamp.
+                        # Reactions on old messages may be filtered out even if recently given.
+                        if reaction_dt < since_dt:
+                            continue
 
-                    # Dedup check
-                    existing = db.query(SlackReaction).filter_by(
-                        developer_id=developer_id,
-                        reaction_name=reaction_name,
-                        target_message_ts=msg_ts,
-                    ).first()
-                    if existing:
-                        continue
+                        reaction_name = reaction.get("name", "")
+                        target_user = message.get("user", "")
 
-                    slack_reaction = SlackReaction(
-                        developer_id=developer_id,
-                        reaction_name=reaction_name,
-                        target_message_ts=msg_ts,
-                        target_user_id=target_user,
-                        reaction_date=reaction_dt.date(),
-                    )
-                    db.add(slack_reaction)
-                    synced += 1
+                        # Dedup check
+                        existing = db.query(SlackReaction).filter_by(
+                            developer_id=developer_id,
+                            reaction_name=reaction_name,
+                            target_message_ts=msg_ts,
+                        ).first()
+                        if existing:
+                            continue
+
+                        slack_reaction = SlackReaction(
+                            developer_id=developer_id,
+                            reaction_name=reaction_name,
+                            target_message_ts=msg_ts,
+                            target_user_id=target_user,
+                            reaction_date=reaction_dt.date(),
+                        )
+                        db.add(slack_reaction)
+                        synced += 1
+
+                if not response.get("has_more") or not items:
+                    break
+                cursor = response.get("response_metadata", {}).get("next_cursor")
+                if not cursor:
+                    break
 
         except Exception as e:
             logger.error(f"Error syncing reactions for user {slack_user_id}: {e}")
