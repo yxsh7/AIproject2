@@ -48,8 +48,6 @@ def create_github_integration(
             detail="Only admins can configure integrations",
         )
 
-    # For now, we'll assume organization_id = 1
-    # In production, you'd get this from the user's profile
     organization_id = current_user.organization_id or 1
 
     # Test the connection first

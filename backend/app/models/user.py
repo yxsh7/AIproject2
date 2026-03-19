@@ -32,6 +32,7 @@ class User(Base):
 
     # Relationships
     developer_profile = relationship("DeveloperProfile", back_populates="user", uselist=False)
+    organization = relationship("Organization", foreign_keys=[organization_id])
 
     def __repr__(self):
         return f"<User {self.email}>"
