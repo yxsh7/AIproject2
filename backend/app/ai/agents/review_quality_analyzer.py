@@ -1,6 +1,5 @@
 """AI agent for analyzing code review quality"""
 import logging
-from typing import Optional
 
 from app.ai.base import get_ai_chat_model, extract_json
 
@@ -51,14 +50,6 @@ class ReviewQualityAnalyzer:
 
     def _fallback_analyze(self, comments: list[str]) -> dict:
         """Rule-based quality analysis when AI is unavailable."""
-        if not comments:
-            return {
-                "quality_score": 0,
-                "mentoring_detected": False,
-                "comment_depth": "shallow",
-                "explanation": "No comments to analyze.",
-            }
-
         all_text = " ".join(comments)
         avg_len = sum(len(c) for c in comments) / len(comments)
 
@@ -137,7 +128,7 @@ Scoring guide:
         result = extract_json(content)
 
         return {
-            "quality_score": float(result.get("quality_score", 5)),
+            "quality_score": round(float(result.get("quality_score", 5)), 1),
             "mentoring_detected": bool(result.get("mentoring_detected", False)),
             "comment_depth": result.get("comment_depth", "moderate"),
             "explanation": result.get("explanation", "AI analysis"),
