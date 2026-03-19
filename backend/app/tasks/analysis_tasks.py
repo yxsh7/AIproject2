@@ -314,7 +314,21 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
 @celery_app.task(name="app.tasks.analysis_tasks.analyze_code_reviews")
 def analyze_code_reviews(developer_id: int, limit: int = 100):
-    """Analyze code review quality for a developer."""
+    """
+    Analyze code review quality for a developer using AI.
+
+    Only processes reviews that have raw_comments stored in analysis_result
+    (populated by github_service.sync_code_reviews_for_developer).
+    Updates quality_score on CodeReview records and creates WorkActivity
+    entries (source_type='git_review') with dedup protection.
+
+    Args:
+        developer_id: Developer profile ID
+        limit: Max number of reviews to analyze
+
+    Returns:
+        Dict with analyzed_count
+    """
     db = get_db()
 
     try:
@@ -356,7 +370,8 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
                     comments=comments,
                 )
 
-                review.quality_score = result["quality_score"]
+                # Update quality score on the review record — always refreshed on re-analysis
+                review.quality_score = round(result["quality_score"])
                 review.analysis_result = {**review.analysis_result, **result}
 
                 # Dedup check
@@ -373,7 +388,7 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
                         work_type=WorkType.CODE_REVIEW,
                         complexity_score=5,
                         impact_score=5,
-                        quality_score=int(result["quality_score"]),
+                        quality_score=round(result["quality_score"]),
                         time_estimate_hours=1,
                         source_type="git_review",
                         source_id=str(review.id),
