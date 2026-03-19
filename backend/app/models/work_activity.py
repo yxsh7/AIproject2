@@ -1,5 +1,5 @@
 """Work activity model - unified view of all developer work"""
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Date, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Date, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -35,12 +35,16 @@ class WorkActivity(Base):
 
     __tablename__ = "work_activities"
 
+    __table_args__ = (
+        UniqueConstraint('developer_id', 'source_type', 'source_id', name='uq_work_activity_source'),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
 
     # Activity metadata
     activity_date = Column(Date, nullable=False, index=True)
-    work_type = Column(SQLEnum(WorkType), nullable=False, index=True)
+    work_type = Column(SQLEnum(WorkType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
 
     # Scores (0-10 scale)
     complexity_score = Column(Integer, nullable=False)  # How complex was the work?

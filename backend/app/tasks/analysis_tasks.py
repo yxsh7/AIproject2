@@ -6,12 +6,35 @@ from sqlalchemy.orm import Session
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
 from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile
-from app.services.github_service import GitHubService
-from app.services.jira_service import JiraService
 from app.ai.agents.code_analyzer import CodeComplexityAnalyzer
 from app.ai.agents.work_classifier import WorkTypeClassifier
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_work_type(work_type_str: str) -> WorkType:
+    """Map AI work type string to WorkType enum, handling unknown values gracefully"""
+    try:
+        return WorkType(work_type_str)
+    except ValueError:
+        mapping = {
+            "feature": WorkType.CODE,
+            "code": WorkType.CODE,
+            "bug_fix": WorkType.BUG_FIX,
+            "refactoring": WorkType.REFACTORING,
+            "documentation": WorkType.DOCUMENTATION,
+            "testing": WorkType.TESTING,
+            "research": WorkType.RESEARCH,
+            "mentoring": WorkType.MENTORING,
+            "config": WorkType.CODE,
+            "other": WorkType.OTHER,
+            "code_review": WorkType.CODE_REVIEW,
+            "dashboard": WorkType.DASHBOARD,
+            "operations": WorkType.OPERATIONS,
+            "design": WorkType.DESIGN,
+            "meeting": WorkType.MEETING,
+        }
+        return mapping.get(work_type_str.lower(), WorkType.CODE)
 
 
 def get_db():
@@ -92,13 +115,26 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                 commit.analysis_result = analysis
                 commit.analyzed = True
 
+                # Dedup: skip if WorkActivity already exists for this source
+                existing = db.query(WorkActivity).filter_by(
+                    developer_id=developer_id,
+                    source_type="git",
+                    source_id=str(commit.id),
+                ).first()
+                if existing:
+                    # Still mark as analyzed to avoid re-processing
+                    commit.analyzed = True
+                    continue
+
                 # Create work activity
+                # support both old "impact_level" and new "impact" key names
+                impact_str = analysis.get("impact", analysis.get("impact_level", "medium"))
                 work_activity = WorkActivity(
                     developer_id=developer_id,
                     activity_date=commit.committed_at.date(),
-                    work_type=WorkType(analysis["work_type"]),
+                    work_type=_safe_work_type(analysis.get("work_type", "feature")),
                     complexity_score=analysis["complexity_score"],
-                    impact_score=_map_impact_to_score(analysis["impact_level"]),
+                    impact_score=_map_impact_to_score(impact_str),
                     quality_score=analysis["quality_score"],
                     time_estimate_hours=_estimate_time_from_complexity(
                         analysis["complexity_score"]
@@ -223,11 +259,21 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                 ticket.analysis_result = classification
                 ticket.analyzed = True
 
+                # Dedup: skip if WorkActivity already exists for this source
+                existing = db.query(WorkActivity).filter_by(
+                    developer_id=developer_id,
+                    source_type="jira",
+                    source_id=str(ticket.id),
+                ).first()
+                if existing:
+                    ticket.analyzed = True
+                    continue
+
                 # Create work activity
                 work_activity = WorkActivity(
                     developer_id=developer_id,
                     activity_date=ticket.created_at.date(),
-                    work_type=WorkType(classification["work_type"]),
+                    work_type=_safe_work_type(classification.get("work_type", "code")),
                     complexity_score=classification["complexity_score"],
                     impact_score=classification["impact_score"],
                     quality_score=7,  # Default for Jira tickets
