@@ -25,6 +25,8 @@ from app.models import (
     WorkActivity,
     ProductivityScore,
     AIInsight,
+    SlackMessage,
+    SlackReaction,
 )
 
 # this is the Alembic Config object, which provides

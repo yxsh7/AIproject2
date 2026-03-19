@@ -6,7 +6,8 @@ from app.models.integration import IntegrationConfig, IntegrationType, Integrati
 from app.models.git_activity import GitCommit, PullRequest, CodeReview
 from app.models.jira_activity import JiraTicket, JiraComment
 from app.models.work_activity import WorkActivity, WorkType
-from app.models.productivity import ProductivityScore, AIInsight
+from app.models.productivity import ProductivityScore, AIInsight, InsightType, InsightPriority
+from app.models.slack_activity import SlackMessage, SlackReaction
 
 __all__ = [
     "User",
@@ -26,4 +27,8 @@ __all__ = [
     "WorkType",
     "ProductivityScore",
     "AIInsight",
+    "InsightType",
+    "InsightPriority",
+    "SlackMessage",
+    "SlackReaction",
 ]
