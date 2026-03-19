@@ -19,7 +19,7 @@ class SlackMessage(Base):
     developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
     channel_id = Column(String, nullable=False)
     channel_name = Column(String, nullable=True)
-    message_ts = Column(String, unique=True, nullable=False)  # Slack timestamp — globally unique
+    message_ts = Column(String, nullable=False)  # Slack timestamp — globally unique; uniqueness enforced by uq_slack_message_ts constraint
     message_date = Column(Date, nullable=False)
     has_code_block = Column(Integer, nullable=False, default=0)
     reply_count = Column(Integer, nullable=False, default=0)
@@ -28,7 +28,7 @@ class SlackMessage(Base):
     analysis_result = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    developer = relationship("DeveloperProfile", foreign_keys=[developer_id])
+    developer = relationship("DeveloperProfile", foreign_keys=[developer_id], back_populates="slack_messages")
 
     def __repr__(self):
         return f"<SlackMessage {self.message_ts} in {self.channel_name}>"
@@ -46,12 +46,12 @@ class SlackReaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
     reaction_name = Column(String, nullable=False)
-    target_message_ts = Column(String, nullable=False)
+    target_message_ts = Column(String, nullable=False)  # No FK — reactions may reference messages in unmonitored channels
     target_user_id = Column(String, nullable=True)
     reaction_date = Column(Date, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    developer = relationship("DeveloperProfile", foreign_keys=[developer_id])
+    developer = relationship("DeveloperProfile", foreign_keys=[developer_id], back_populates="slack_reactions")
 
     def __repr__(self):
         return f"<SlackReaction :{self.reaction_name}: by {self.developer_id}>"

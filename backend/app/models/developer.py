@@ -24,7 +24,7 @@ class RoleProfile(Base):
     __tablename__ = "role_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    role_level = Column(SQLEnum(RoleLevel), unique=True, nullable=False, index=True)
+    role_level = Column(SQLEnum(RoleLevel, values_callable=lambda x: [e.value for e in x]), unique=True, nullable=False, index=True)
 
     # Expected work distribution (JSON: {work_type: percentage})
     # e.g., {"code": 70, "meetings": 15, "documentation": 15}
@@ -60,7 +60,7 @@ class DeveloperProfile(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
     # Role information
-    role_level = Column(SQLEnum(RoleLevel), nullable=False, index=True)
+    role_level = Column(SQLEnum(RoleLevel, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
     team = Column(String, nullable=True, index=True)
     job_title = Column(String, nullable=True)
 
@@ -88,6 +88,8 @@ class DeveloperProfile(Base):
     work_activities = relationship("WorkActivity", back_populates="developer")
     productivity_scores = relationship("ProductivityScore", back_populates="developer")
     insights = relationship("AIInsight", back_populates="developer")
+    slack_messages = relationship("SlackMessage", foreign_keys="SlackMessage.developer_id", back_populates="developer")
+    slack_reactions = relationship("SlackReaction", foreign_keys="SlackReaction.developer_id", back_populates="developer")
 
     def __repr__(self):
         return f"<DeveloperProfile {self.github_username or self.user_id}>"
