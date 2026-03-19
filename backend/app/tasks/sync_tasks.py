@@ -1,4 +1,4 @@
-"""Background tasks for syncing data from GitHub and Jira"""
+"""Background tasks for syncing data from GitHub, Jira, and Slack"""
 import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ def get_db():
 @celery_app.task(name="app.tasks.sync_tasks.sync_integration_task")
 def sync_integration_task(integration_id: int, days_back: int = 30):
     """
-    Sync a specific integration (GitHub or Jira)
+    Sync a specific integration (GitHub, Jira, or Slack)
 
     Args:
         integration_id: Integration configuration ID

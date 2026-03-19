@@ -418,7 +418,7 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
 
 
 @celery_app.task(name="app.tasks.analysis_tasks.analyze_slack_messages")
-def analyze_slack_messages(developer_id: int, limit: int = 200):
+def analyze_slack_messages(developer_id: int, limit: int = 100):
     """
     Convert unanalyzed Slack messages to WorkActivity records.
 
