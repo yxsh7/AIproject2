@@ -47,6 +47,21 @@ class GitHubService:
             raise ValueError("GitHub access token not found in config")
         return cls(access_token=token)
 
+    def _get_repos(self, org_name: str = None):
+        """Get repos for an org, personal username, or authenticated user."""
+        if not org_name:
+            return self.client.get_user().get_repos()
+        try:
+            return self.client.get_organization(org_name).get_repos()
+        except GithubException:
+            # Not an org — try as a personal username
+            try:
+                return self.client.get_user(org_name).get_repos()
+            except GithubException:
+                # Fall back to authenticated user's own repos
+                logger.warning(f"Could not find org or user '{org_name}', using authenticated user repos")
+                return self.client.get_user().get_repos()
+
     def test_connection(self) -> bool:
         """
         Test GitHub API connection
@@ -112,14 +127,7 @@ class GitHubService:
 
         try:
             # Handle both organization and personal accounts
-            if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
-            else:
-                # Personal account - get authenticated user's repos
-                user = self.client.get_user()
-                repos = user.get_repos()
-
+            repos = self._get_repos(org_name)
             since_date = datetime.utcnow() - timedelta(days=days_back)
             commits_synced = 0
 
@@ -196,15 +204,7 @@ class GitHubService:
             return 0
 
         try:
-            # Handle both organization and personal accounts
-            if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
-            else:
-                # Personal account - get authenticated user's repos
-                user = self.client.get_user()
-                repos = user.get_repos()
-
+            repos = self._get_repos(org_name)
             since_date = datetime.utcnow() - timedelta(days=days_back)
             prs_synced = 0
 
@@ -299,15 +299,7 @@ class GitHubService:
             return 0
 
         try:
-            # Handle both organization and personal accounts
-            if org_name:
-                org = self.client.get_organization(org_name)
-                repos = org.get_repos()
-            else:
-                # Personal account - get authenticated user's repos
-                user = self.client.get_user()
-                repos = user.get_repos()
-
+            repos = self._get_repos(org_name)
             since_date = datetime.utcnow() - timedelta(days=days_back)
             reviews_synced = 0
 
@@ -349,8 +341,13 @@ class GitHubService:
                             if existing:
                                 continue
 
-                            # Count review comments
-                            comment_count = len(list(pr.get_review_comments()))
+                            # Fetch review comments and store bodies for quality analysis
+                            all_pr_comments = list(pr.get_review_comments())
+                            reviewer_comments = [
+                                c.body for c in all_pr_comments
+                                if c.user.login == developer.github_username
+                            ]
+                            comment_count = len(reviewer_comments)
 
                             # Create new review record
                             code_review = CodeReview(
@@ -359,6 +356,10 @@ class GitHubService:
                                 comment_count=comment_count,
                                 review_state=review.state,
                                 reviewed_at=review.submitted_at or pr.created_at,
+                                analysis_result={
+                                    "raw_comments": reviewer_comments,
+                                    "comment_count": comment_count,
+                                },
                             )
 
                             db.add(code_review)

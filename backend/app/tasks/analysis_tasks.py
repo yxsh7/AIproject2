@@ -3,9 +3,10 @@ import logging
 
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
-from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile
+from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile, CodeReview
 from app.ai.agents.code_analyzer import CodeComplexityAnalyzer
 from app.ai.agents.work_classifier import WorkTypeClassifier
+from app.ai.agents.review_quality_analyzer import ReviewQualityAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,95 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
         db.close()
 
 
+@celery_app.task(name="app.tasks.analysis_tasks.analyze_code_reviews")
+def analyze_code_reviews(developer_id: int, limit: int = 100):
+    """Analyze code review quality for a developer."""
+    db = get_db()
+
+    try:
+        developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+        if not developer:
+            return {"error": "Developer not found"}
+
+        # Fetch reviews with null quality_score
+        reviews_query = (
+            db.query(CodeReview)
+            .filter(
+                CodeReview.reviewer_id == developer_id,
+                CodeReview.quality_score == None,
+            )
+            .order_by(CodeReview.reviewed_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        # Filter in Python: only reviews that have raw_comments stored
+        reviews = [
+            r for r in reviews_query
+            if r.analysis_result and "raw_comments" in r.analysis_result
+        ]
+
+        if not reviews:
+            return {"analyzed_count": 0}
+
+        analyzer = ReviewQualityAnalyzer()
+        analyzed_count = 0
+
+        for review in reviews:
+            try:
+                comments = review.analysis_result.get("raw_comments", [])
+                result = analyzer.analyze_review(
+                    reviewer_username=developer.github_username or "",
+                    pr_title="",
+                    review_state=review.review_state or "commented",
+                    comments=comments,
+                )
+
+                review.quality_score = result["quality_score"]
+                review.analysis_result = {**review.analysis_result, **result}
+
+                # Dedup check
+                existing = db.query(WorkActivity).filter_by(
+                    developer_id=developer_id,
+                    source_type="git_review",
+                    source_id=str(review.id),
+                ).first()
+
+                if not existing:
+                    work_activity = WorkActivity(
+                        developer_id=developer_id,
+                        activity_date=review.reviewed_at.date(),
+                        work_type=WorkType.CODE_REVIEW,
+                        complexity_score=5,
+                        impact_score=5,
+                        quality_score=int(result["quality_score"]),
+                        time_estimate_hours=1,
+                        source_type="git_review",
+                        source_id=str(review.id),
+                        ai_analysis=result,
+                        artifacts=[],
+                    )
+                    db.add(work_activity)
+
+                analyzed_count += 1
+
+                if analyzed_count % 10 == 0:
+                    db.commit()
+
+            except Exception as e:
+                logger.error(f"Error analyzing review {review.id}: {e}")
+                continue
+
+        db.commit()
+        return {"analyzed_count": analyzed_count}
+
+    except Exception as e:
+        logger.error(f"Error in analyze_code_reviews: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.analysis_tasks.analyze_all_unanalyzed")
 def analyze_all_unanalyzed():
     """
@@ -336,6 +426,9 @@ def analyze_all_unanalyzed():
                 # Analyze tickets
                 ticket_result = analyze_jira_tickets.delay(developer.id, limit=50)
                 total_tickets += 1
+
+                # Analyze code reviews
+                analyze_code_reviews.delay(developer.id, limit=50)
 
             except Exception as e:
                 logger.error(f"Error triggering analysis for developer {developer.id}: {e}")
