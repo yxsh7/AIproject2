@@ -4,6 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '../../store/auth';
+
+function redirectForRole(role: string | undefined, router: ReturnType<typeof useRouter>) {
+  if (role === 'manager' || role === 'admin') {
+    router.push('/dashboard/manager');
+  } else {
+    router.push('/dashboard');
+  }
+}
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
@@ -19,7 +27,7 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      router.push('/dashboard');
+      redirectForRole(useAuthStore.getState().user?.role, router);
     } catch (error) {
       console.error('Login failed:', error);
     }
@@ -30,7 +38,7 @@ export default function LoginPage() {
     setPassword(demoPassword);
     try {
       await login({ email: demoEmail, password: demoPassword });
-      router.push('/dashboard');
+      redirectForRole(useAuthStore.getState().user?.role, router);
     } catch (error) {
       console.error('Demo login failed:', error);
     }
