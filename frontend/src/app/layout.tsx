@@ -1,31 +1,27 @@
 import type { Metadata } from "next";
-import { DM_Sans, JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { cn } from '../lib/utils';
+import { Providers } from '../components/providers';
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-dm",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-jetbrains",
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DevMetrics AI — Engineering Intelligence",
+  title: "DevMetrics AI - Engineering Intelligence Platform",
   description: "AI-powered productivity analytics for engineering teams",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
-        {children}
+      <body className={cn(inter.className, "min-h-screen bg-background antialiased")}>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

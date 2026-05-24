@@ -2,141 +2,155 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '../../store/auth';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading, error } = useAuthStore();
 
-  const [email,    setEmail]    = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     try {
       await login({ email, password });
       router.push('/dashboard');
-    } catch {
-      /* handled by store */
+    } catch (error) {
+      console.error('Login failed:', error);
     }
   };
 
-  const fillDemo = (role: 'manager' | 'dev') => {
-    if (role === 'manager') { setEmail('manager@devmetrics.ai'); setPassword('Manager123!'); }
-    else                    { setEmail('dev@devmetrics.ai');     setPassword('Dev123!');     }
-  };
-
   return (
-    <div
-      className="dm-bg-grid"
-      style={{
-        minHeight: '100vh',
-        background: 'var(--surf-0)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-      }}
-    >
-      <div
-        className="fade-up"
-        style={{
-          width: '100%',
-          maxWidth: 380,
-          background: 'var(--surf-1)',
-          border: '1px solid var(--border-1)',
-          borderRadius: 12,
-          padding: '32px 28px',
-        }}
-      >
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden p-4">
+      {/* Background effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 -left-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
-            <div style={{
-              width: 30, height: 30, background: 'var(--cyan)', borderRadius: 7,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0a0a0a',
-            }}>DM</div>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--txt-1)', letterSpacing: '-0.02em' }}>DevMetrics</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--txt-3)', marginTop: 2 }}>Engineering Intelligence Platform</p>
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+              <span className="text-white font-bold text-xl">D</span>
+            </div>
+            <span className="text-2xl font-bold text-white">DevMetrics AI</span>
+          </Link>
         </div>
 
-        <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--txt-1)', marginBottom: 22, letterSpacing: '-0.01em' }}>
-          Sign in
-        </h1>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Email</label>
-            <input
-              className="dm-input"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              required
-              disabled={isLoading}
-            />
+        {/* Login Card */}
+        <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
+            <p className="text-slate-400">Sign in to access your analytics</p>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Password</label>
-            <input
-              className="dm-input"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              disabled={isLoading}
-            />
-          </div>
-
-          {error && (
-            <div style={{ background: 'var(--red-dim)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '9px 13px', fontSize: 12, color: 'var(--red)' }}>
-              {error}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium text-slate-300">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+                className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              width: '100%',
-              background: isLoading ? 'rgba(129,140,248,0.06)' : 'var(--cyan)',
-              color: isLoading ? 'var(--txt-3)' : '#0a0a0a',
-              border: 'none', borderRadius: 8,
-              padding: '11px 0', fontSize: 13, fontWeight: 600,
-              fontFamily: 'var(--font-body)',
-              cursor: isLoading ? 'default' : 'pointer',
-              transition: 'all 0.15s', marginTop: 2,
-            }}
-          >
-            {isLoading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium text-slate-300">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
+              />
+            </div>
 
-        <p style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'var(--txt-3)' }}>
-          No account?{' '}
-          <a href="/register" style={{ color: 'var(--cyan)', textDecoration: 'none' }}>Register</a>
-        </p>
+            {error && (
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
 
-        {/* Demo accounts */}
-        <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border-0)' }}>
-          <p style={{ fontSize: 10, color: 'var(--txt-3)', textAlign: 'center', marginBottom: 10 }}>Demo accounts</p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {(['manager', 'dev'] as const).map(role => (
-              <button
-                key={role}
-                onClick={() => fillDemo(role)}
-                className="dm-btn"
-                style={{ flex: 1, fontSize: 11 }}
-              >
-                {role === 'manager' ? 'Manager' : 'Developer'}
-              </button>
-            ))}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25"
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in'
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center text-sm text-slate-400">
+            Don't have an account?{' '}
+            <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
+              Register here
+            </Link>
           </div>
+
+          {/* Demo accounts */}
+          <div className="mt-8 pt-6 border-t border-slate-700/50">
+            <p className="text-xs text-slate-500 text-center mb-3">Demo Accounts</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('manager@devmetrics.ai');
+                  setPassword('Manager123!');
+                }}
+                className="p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors text-left"
+              >
+                <span className="text-xs text-slate-400">Manager</span>
+                <p className="text-sm text-white font-medium truncate">manager@devmetrics.ai</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('dev@devmetrics.ai');
+                  setPassword('Dev123!');
+                }}
+                className="p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors text-left"
+              >
+                <span className="text-xs text-slate-400">Developer</span>
+                <p className="text-sm text-white font-medium truncate">dev@devmetrics.ai</p>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Back to home */}
+        <div className="mt-6 text-center">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-400 transition-colors">
+            Back to home
+          </Link>
         </div>
       </div>
     </div>

@@ -1,92 +1,127 @@
 # DevMetrics AI
 
-![Next.js](https://img.shields.io/badge/Next.js_14-black?style=flat-square&logo=next.js)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
-![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=langchain&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+**AI-Powered Engineering Intelligence Platform**
 
-**AI-powered engineering productivity platform** that connects to GitHub and Jira, runs a multi-step LangChain pipeline against Claude, and produces multi-dimensional developer scorecards with actionable recommendations — all surfaced in a dark, glassmorphic dashboard.
-
----
-
-## Architecture
-
-```mermaid
-graph LR
-    U[User Browser] --> N[Next.js 14]
-    N -->|REST| F[FastAPI]
-    F --> P[(PostgreSQL)]
-    F --> R[(Redis)]
-    R --> C[Celery Worker]
-    C --> G[GitHub API]
-    C --> J[Jira API]
-    C --> L[LangChain Pipeline]
-    L --> A[Claude API]
-    A --> L
-    L --> P
-```
-
----
+Understand developer productivity beyond lines of code. AI-powered insights that measure real impact, complexity, and collaboration.
 
 ## Features
 
-- **Multi-dimensional scoring** — quality, impact, velocity, collaboration, reliability, growth tracked per developer
-- **LangChain AI pipeline** — commits and tickets processed through a structured agent chain powered by Claude
-- **Real-time dashboard** — dark glassmorphic UI with animated charts (Recharts + Framer Motion)
-- **Team manager view** — compare all developers side-by-side with trend analysis
-- **Integration hub** — connect GitHub repos and Jira projects through the in-app UI
-- **Cost-controlled** — AI analysis is manual-only; no background spend without confirmation
+### For Developers
+- Personal productivity dashboard with multi-dimensional scoring
+- Transparent metrics - see exactly what your manager sees
+- Credit for complex work (refactoring, architecture, research)
+- AI-generated growth recommendations
 
----
+### For Managers
+- Team overview and individual deep dives
+- AI-powered insights and burnout risk detection
+- Role-based performance evaluation (intern to principal)
+- Workload distribution analysis
 
 ## Quick Start
 
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL
+- Redis (for background tasks)
+
+### Backend Setup
+
 ```bash
-# 1. Start infrastructure
-docker compose -f backend/docker-compose.yml up -d
+cd backend
 
-# 2. Create and activate Python venv, install dependencies
-cd backend && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt && cd ..
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 3. Configure environment, migrate, seed
-cp backend/.env.example backend/.env   # fill in DATABASE_URL + ANTHROPIC_API_KEY
-cd backend && alembic upgrade head && python seed_data.py && cd ..
+# Install dependencies
+pip install -r requirements.txt
 
-# 4. Install frontend dependencies
-cd frontend && npm install && cd ..
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
 
-# 5. Launch everything
-bash start.sh
+# Run database migrations
+alembic upgrade head
+
+# Start server
+uvicorn app.main:app --reload
 ```
 
-Open **http://localhost:3000** — the dark marketing landing page loads immediately.
+### Frontend Setup
 
----
+```bash
+cd frontend
 
-## Demo Credentials
+# Install dependencies
+npm install
 
-| Role | Email | Password |
-|---|---|---|
-| Manager | `manager@devmetrics.ai` | `Manager123!` |
-| Developer 1 | `dev1@devmetrics.ai` | `Dev123!` |
-| Developer 2 | `dev2@devmetrics.ai` | `Dev123!` |
+# Configure environment
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 
----
+# Start development server
+npm run dev
+```
+
+### Start Background Worker (Optional)
+
+```bash
+cd backend
+# Linux/Mac:
+celery -A app.tasks worker --loglevel=info
+
+# Windows:
+celery -A app.tasks worker --loglevel=info --pool=solo
+```
+
+## Configuration
+
+### Required Environment Variables
+
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/devmetrics
+
+# Security
+JWT_SECRET=your-secret-key
+
+# AI Provider (choose one)
+OPENAI_API_KEY=sk-...
+# Or use OpenRouter:
+OPENAI_API_BASE=https://openrouter.ai/api/v1
+
+# Optional
+REDIS_URL=redis://localhost:6379
+ANTHROPIC_API_KEY=...
+```
+
+### Integrations
+
+After starting the app:
+1. Login as admin
+2. Go to Dashboard > Integrations
+3. Connect GitHub with a Personal Access Token
+4. Connect Jira with API token (optional)
 
 ## Tech Stack
 
-| Layer | Technologies |
-|---|---|
-| Frontend | Next.js 14, TypeScript, TailwindCSS, Framer Motion, Recharts, Zustand |
-| Backend | FastAPI, SQLAlchemy, Alembic, Celery, Redis |
-| AI | LangChain, Claude API (Anthropic) |
-| Data | PostgreSQL, Redis |
-| Integrations | GitHub REST API, Jira REST API |
+**Backend:** FastAPI, PostgreSQL, SQLAlchemy, Celery, LangChain
+
+**Frontend:** Next.js 14, TailwindCSS, TypeScript
+
+**AI:** OpenAI GPT-4o-mini (or Claude via Anthropic)
+
+## API Documentation
+
+When the backend is running, visit:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## License
+
+MIT License
 
 ---
 
-> **Private project — not open source. All rights reserved.**
-> Built as a portfolio demonstration. Not for redistribution or commercial use without permission.
->
-> Built by **Yash Kamthe**
+Built by [Yash Kamthe](https://github.com/yxsh7)

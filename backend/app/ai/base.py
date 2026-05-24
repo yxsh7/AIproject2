@@ -23,13 +23,11 @@ def extract_json(text: str) -> Dict:
     """
     text = text.strip()
 
-    # 1. Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # 2. Strip ```json ... ``` fences
     if "```json" in text:
         try:
             content = text.split("```json")[1].split("```")[0].strip()
@@ -37,7 +35,6 @@ def extract_json(text: str) -> Dict:
         except (IndexError, json.JSONDecodeError):
             pass
 
-    # 3. Strip ``` ... ``` fences
     if "```" in text:
         try:
             content = text.split("```")[1].split("```")[0].strip()
@@ -45,7 +42,7 @@ def extract_json(text: str) -> Dict:
         except (IndexError, json.JSONDecodeError):
             pass
 
-    # 4. Walk braces to find the first complete {...} block (handles preamble/postamble)
+    # Walk braces to find the first complete {...} block
     start = text.find('{')
     if start != -1:
         depth = 0
@@ -109,7 +106,6 @@ def get_ai_chat_model() -> Optional[Any]:
     Returns an object with an .invoke(prompt: str) method.
     Priority: OpenRouter → Anthropic → None (rule-based)
     """
-    # --- OpenRouter ---
     if settings.OPENROUTER_API_KEY:
         try:
             model = settings.OPENROUTER_MODEL or "nvidia/nemotron-3-super-120b-a12b:free"
@@ -125,7 +121,6 @@ def get_ai_chat_model() -> Optional[Any]:
         except Exception as e:
             logger.warning(f"Failed to initialize OpenRouter client: {e}")
 
-    # --- Anthropic (direct SDK, no langchain) ---
     if getattr(settings, "ANTHROPIC_API_KEY", None) and settings.AI_MODEL_PROVIDER.lower() == "anthropic":
         try:
             import anthropic
@@ -152,3 +147,24 @@ def get_ai_chat_model() -> Optional[Any]:
 
     logger.info("No AI API key configured. Running in rule-based mode (no AI costs).")
     return None
+
+
+def check_ai_available() -> bool:
+    """Returns True if at least one AI provider is configured."""
+    return bool(
+        settings.OPENROUTER_API_KEY
+        or getattr(settings, "ANTHROPIC_API_KEY", None)
+        or getattr(settings, "OPENAI_API_KEY", None)
+    )
+
+
+def get_ai_status() -> dict:
+    """Returns current AI configuration status."""
+    return {
+        "provider": "openrouter" if settings.OPENROUTER_API_KEY else settings.AI_MODEL_PROVIDER,
+        "model": settings.OPENROUTER_MODEL or settings.AI_MODEL_NAME,
+        "available": check_ai_available(),
+        "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
+        "anthropic_configured": bool(getattr(settings, "ANTHROPIC_API_KEY", None)),
+        "openai_configured": bool(getattr(settings, "OPENAI_API_KEY", None)),
+    }
