@@ -515,6 +515,14 @@ def main():
             role="manager",
         )
 
+        seed_user(
+            db,
+            email="demo@devmetrics.ai",
+            password="demo",
+            full_name="Demo User",
+            role="manager",
+        )
+
         junior_user = seed_user(
             db,
             email="junior@devmetrics.ai",
@@ -610,6 +618,7 @@ def main():
         print("Seeding complete!")
         print("=" * 60)
         print("\nDemo accounts:")
+        print("  Demo:     demo@devmetrics.ai      / demo")
         print("  Admin:    admin@devmetrics.ai     / admin123")
         print("  Manager:  manager@devmetrics.ai   / Manager123!")
         print("  Senior:   senior@devmetrics.ai    / Dev123!")

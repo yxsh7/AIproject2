@@ -25,6 +25,17 @@ export default function LoginPage() {
     }
   };
 
+  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    try {
+      await login({ email: demoEmail, password: demoPassword });
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Demo login failed:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden p-4">
       {/* Background effects */}
@@ -116,33 +127,16 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          {/* Demo accounts */}
-          <div className="mt-8 pt-6 border-t border-slate-700/50">
-            <p className="text-xs text-slate-500 text-center mb-3">Demo Accounts</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('manager@devmetrics.ai');
-                  setPassword('Manager123!');
-                }}
-                className="p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors text-left"
-              >
-                <span className="text-xs text-slate-400">Manager</span>
-                <p className="text-sm text-white font-medium truncate">manager@devmetrics.ai</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('dev@devmetrics.ai');
-                  setPassword('Dev123!');
-                }}
-                className="p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors text-left"
-              >
-                <span className="text-xs text-slate-400">Developer</span>
-                <p className="text-sm text-white font-medium truncate">dev@devmetrics.ai</p>
-              </button>
-            </div>
+          {/* Demo access */}
+          <div className="mt-6 pt-6 border-t border-slate-700/50">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => handleDemoLogin('demo@devmetrics.ai', 'demo')}
+              className="w-full py-2.5 rounded-xl border border-slate-600/50 hover:border-slate-500 bg-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Try Demo
+            </button>
           </div>
         </div>
 

@@ -19,6 +19,7 @@ from app.api.dependencies import get_current_active_user
 from app.services.github_service import GitHubService
 from app.services.jira_service import JiraService
 from app.services.slack_service import SlackService
+from app.config import settings
 
 router = APIRouter()
 
@@ -233,6 +234,13 @@ async def trigger_sync(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only managers and admins can trigger syncs",
+        )
+
+    if settings.DEMO_MODE:
+        return IntegrationSyncResponse(
+            job_id="demo-mode",
+            message="Demo mode: sync disabled. The dashboard uses pre-loaded sample data.",
+            estimated_time_minutes=0,
         )
 
     integration = (

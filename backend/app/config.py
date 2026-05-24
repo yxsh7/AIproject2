@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "DevMetrics AI"
     DEBUG: bool = False
     VERSION: str = "0.1.0"
+    DEMO_MODE: bool = False
 
     # Database
     DATABASE_URL: str
