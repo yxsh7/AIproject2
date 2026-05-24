@@ -175,22 +175,11 @@ def update_developer(
     developer_id: int,
     profile_update: DeveloperProfileUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_manager_or_admin),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
-    Update a developer profile (Manager/Admin only)
-
-    Args:
-        developer_id: Developer profile ID
-        profile_update: Fields to update
-        db: Database session
-        current_user: Current authenticated user (manager or admin)
-
-    Returns:
-        Updated developer profile
-
-    Raises:
-        HTTPException: If developer not found
+    Update a developer profile.
+    Developers can update their own profile; managers/admins can update any profile.
     """
     developer = (
         db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
@@ -200,6 +189,18 @@ def update_developer(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found"
         )
+
+    # Developers can only update their own profile
+    if current_user.role not in ("manager", "admin"):
+        if developer.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own profile",
+            )
+        # Developers cannot change their own role_level
+        profile_update_data = profile_update.dict(exclude_unset=True)
+        profile_update_data.pop("role_level", None)
+        profile_update = DeveloperProfileUpdate(**profile_update_data)
 
     # Update only provided fields
     update_data = profile_update.dict(exclude_unset=True)

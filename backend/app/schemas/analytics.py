@@ -12,18 +12,19 @@ class ProductivityScoreResponse(BaseModel):
     period_start: date
     period_end: date
     overall_score: float
-    complexity_score: float
-    velocity_score: float
-    quality_score: float
-    impact_score: float
-    collaboration_score: float
-    mentoring_score: float
-    total_commits: int
-    total_prs: int
-    total_tickets: int
-    lines_added: int
-    lines_deleted: int
-    work_breakdown: Dict[str, float]
+    # Dimension scores are nullable in DB — default to 0.0 to avoid validation failures
+    complexity_score: float = 0.0
+    velocity_score: float = 0.0
+    quality_score: float = 0.0
+    impact_score: float = 0.0
+    collaboration_score: float = 0.0
+    mentoring_score: float = 0.0
+    total_commits: int = 0
+    total_prs: int = 0
+    total_tickets: int = 0
+    lines_added: int = 0
+    lines_deleted: int = 0
+    work_breakdown: Dict[str, float] = Field(default_factory=dict)
     score_metadata: Optional[Dict[str, Any]] = None
 
     class Config:
@@ -94,7 +95,7 @@ class WorkActivityResponse(BaseModel):
     complexity_score: float
     impact_score: float
     quality_score: float
-    time_estimate_hours: int
+    time_estimate_hours: Optional[int] = None
     source_type: str
     ai_analysis: Optional[Dict[str, Any]]
     artifacts: Optional[List[Dict[str, Any]]]

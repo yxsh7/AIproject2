@@ -35,8 +35,8 @@ class IntegrationConfig(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
     # Integration details
-    type = Column(SQLEnum(IntegrationType), nullable=False, index=True)
-    status = Column(SQLEnum(IntegrationStatus), default=IntegrationStatus.INACTIVE, nullable=False)
+    type = Column(SQLEnum(IntegrationType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
+    status = Column(SQLEnum(IntegrationStatus, values_callable=lambda x: [e.value for e in x]), default=IntegrationStatus.INACTIVE, nullable=False)
 
     # Configuration (encrypted JSON containing API tokens, etc.)
     config = Column(JSON, nullable=False)

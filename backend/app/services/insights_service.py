@@ -17,6 +17,14 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Thresholds used by the insights engine
+_TREND_THRESHOLD = 5.0          # score delta to detect an upward/downward trend
+_CONSISTENCY_VARIANCE = 10.0    # variance below which performance is "consistent"
+_LOW_ACTIVITY_RATIO = 0.3       # min fraction of days active before flagging
+_HIGH_ACTIVITY_PER_DAY = 5      # activities/active-day above which burnout risk fires
+_LOW_COLLABORATION_RATIO = 0.05 # min fraction of collaborative activities
+_LOW_SCORE_THRESHOLD = 6.0      # score component below which recommendations fire
+
 
 class InsightsService:
     """Service for generating AI-powered productivity insights"""
@@ -92,7 +100,7 @@ class InsightsService:
         avg_recent = sum(recent_scores[:2]) / 2 if len(recent_scores) >= 2 else 0
         avg_older = sum(recent_scores[2:]) / 2 if len(recent_scores) >= 4 else avg_recent
 
-        if avg_recent > avg_older + 5:
+        if avg_recent > avg_older + _TREND_THRESHOLD:
             insights.append({
                 "insight_type": "productivity_trend",
                 "title": "Strong Upward Productivity Trend",
@@ -109,7 +117,7 @@ class InsightsService:
                     "improvement": round(avg_recent - avg_older, 2),
                 },
             })
-        elif avg_recent < avg_older - 5:
+        elif avg_recent < avg_older - _TREND_THRESHOLD:
             insights.append({
                 "insight_type": "productivity_trend",
                 "title": "Declining Productivity Detected",
@@ -134,7 +142,7 @@ class InsightsService:
                 recent_scores
             )
 
-            if score_variance < 10:  # Low variance
+            if score_variance < _CONSISTENCY_VARIANCE:
                 insights.append({
                     "insight_type": "consistency",
                     "title": "Highly Consistent Performance",
@@ -240,13 +248,93 @@ class InsightsService:
 
         return insights
 
+    def _detect_low_activity(
+        self, activities: List[Dict], active_days: int, days_in_period: int
+    ) -> List[Dict[str, Any]]:
+        """Flag periods where the developer was active less than _LOW_ACTIVITY_RATIO of days."""
+        if active_days >= days_in_period * _LOW_ACTIVITY_RATIO:
+            return []
+        return [{
+            "insight_type": "anomaly",
+            "title": "Low Activity Detected",
+            "description": (
+                f"Only {active_days} active days out of {days_in_period} total days. "
+                "This may indicate blockers, vacation, or focus on non-tracked work."
+            ),
+            "confidence": 0.7,
+            "recommendations": [
+                "Check for blockers or dependencies preventing progress",
+                "Ensure all work is being tracked in GitHub/Jira",
+                "Discuss with manager if workload is appropriate",
+            ],
+            "supporting_data": {
+                "active_days": active_days,
+                "total_days": days_in_period,
+                "activity_ratio": round(active_days / days_in_period, 2),
+            },
+        }]
+
+    def _detect_high_activity(
+        self, activities: list, active_days: int
+    ) -> List[Dict[str, Any]]:
+        """Flag periods where activity rate exceeds _HIGH_ACTIVITY_PER_DAY (burnout risk)."""
+        activities_per_day = len(activities) / max(active_days, 1)
+        if activities_per_day <= _HIGH_ACTIVITY_PER_DAY:
+            return []
+        return [{
+            "insight_type": "anomaly",
+            "title": "Very High Activity Level",
+            "description": (
+                f"Averaging {round(activities_per_day, 1)} activities per day. "
+                "While productivity is high, monitor for burnout risk."
+            ),
+            "confidence": 0.75,
+            "recommendations": [
+                "Ensure sustainable pace - high intensity isn't sustainable long-term",
+                "Take regular breaks and maintain work-life balance",
+                "Discuss workload with manager if feeling overwhelmed",
+            ],
+            "supporting_data": {
+                "activities_per_day": round(activities_per_day, 2),
+                "total_activities": len(activities),
+                "active_days": active_days,
+            },
+        }]
+
+    def _detect_collaboration_gap(self, activities: list) -> List[Dict[str, Any]]:
+        """Flag when less than _LOW_COLLABORATION_RATIO of activities are collaborative."""
+        collaboration_count = sum(
+            1 for a in activities
+            if a.work_type and a.work_type.value in ["code_review", "pair_programming", "documentation"]
+        )
+        collaboration_ratio = collaboration_count / len(activities)
+        if collaboration_ratio >= _LOW_COLLABORATION_RATIO:
+            return []
+        return [{
+            "insight_type": "collaboration_gap",
+            "title": "Limited Collaboration Detected",
+            "description": (
+                f"Only {int(collaboration_ratio * 100)}% of activities involve collaboration. "
+                "Increasing teamwork can improve learning and code quality."
+            ),
+            "confidence": 0.8,
+            "recommendations": [
+                "Participate in more code reviews",
+                "Pair program on complex features",
+                "Contribute to team documentation",
+                "Attend team knowledge sharing sessions",
+            ],
+            "supporting_data": {
+                "collaboration_percentage": round(collaboration_ratio * 100, 1),
+                "collaboration_count": collaboration_count,
+                "total_activities": len(activities),
+            },
+        }]
+
     def _detect_anomalies(
         self, developer: DeveloperProfile, start_date: date, end_date: date
     ) -> List[Dict[str, Any]]:
-        """Detect anomalies and potential issues"""
-        insights = []
-
-        # Get activities
+        """Detect anomalies and potential issues."""
         activities = (
             self.db.query(WorkActivity)
             .filter(
@@ -258,80 +346,16 @@ class InsightsService:
         )
 
         if not activities:
-            return insights
+            return []
 
         days_in_period = (end_date - start_date).days + 1
         active_days = len(set(a.activity_date for a in activities))
 
-        # Check for low activity (potential blocker)
-        if active_days < days_in_period * 0.3:  # Less than 30% days active
-            insights.append({
-                "insight_type": "anomaly",
-                "title": "Low Activity Detected",
-                "description": f"Only {active_days} active days out of {days_in_period} total days. This may indicate blockers, vacation, or focus on non-tracked work.",
-                "confidence": 0.7,
-                "recommendations": [
-                    "Check for blockers or dependencies preventing progress",
-                    "Ensure all work is being tracked in GitHub/Jira",
-                    "Discuss with manager if workload is appropriate",
-                ],
-                "supporting_data": {
-                    "active_days": active_days,
-                    "total_days": days_in_period,
-                    "activity_ratio": round(active_days / days_in_period, 2),
-                },
-            })
-
-        # Check for very high activity (potential burnout risk)
-        activities_per_day = len(activities) / max(active_days, 1)
-        if activities_per_day > 5:  # More than 5 activities per active day
-            insights.append({
-                "insight_type": "anomaly",
-                "title": "Very High Activity Level",
-                "description": f"Averaging {round(activities_per_day, 1)} activities per day. While productivity is high, monitor for burnout risk.",
-                "confidence": 0.75,
-                "recommendations": [
-                    "Ensure sustainable pace - high intensity isn't sustainable long-term",
-                    "Take regular breaks and maintain work-life balance",
-                    "Discuss workload with manager if feeling overwhelmed",
-                ],
-                "supporting_data": {
-                    "activities_per_day": round(activities_per_day, 2),
-                    "total_activities": len(activities),
-                    "active_days": active_days,
-                },
-            })
-
-        # Check for collaboration gaps
-        collaboration_count = sum(
-            1
-            for a in activities
-            if a.work_type
-            and a.work_type.value
-            in ["code_review", "pair_programming", "documentation"]
+        return (
+            self._detect_low_activity(activities, active_days, days_in_period)
+            + self._detect_high_activity(activities, active_days)
+            + self._detect_collaboration_gap(activities)
         )
-        collaboration_ratio = collaboration_count / len(activities)
-
-        if collaboration_ratio < 0.05:  # Less than 5% collaboration
-            insights.append({
-                "insight_type": "collaboration_gap",
-                "title": "Limited Collaboration Detected",
-                "description": f"Only {int(collaboration_ratio * 100)}% of activities involve collaboration. Increasing teamwork can improve learning and code quality.",
-                "confidence": 0.8,
-                "recommendations": [
-                    "Participate in more code reviews",
-                    "Pair program on complex features",
-                    "Contribute to team documentation",
-                    "Attend team knowledge sharing sessions",
-                ],
-                "supporting_data": {
-                    "collaboration_percentage": round(collaboration_ratio * 100, 1),
-                    "collaboration_count": collaboration_count,
-                    "total_activities": len(activities),
-                },
-            })
-
-        return insights
 
     def _generate_recommendations(
         self, developer: DeveloperProfile, start_date: date, end_date: date
@@ -364,7 +388,7 @@ class InsightsService:
         lowest_component = min(score_components, key=score_components.get)
         lowest_score = score_components[lowest_component]
 
-        if lowest_score < 6:  # Below 6/10
+        if lowest_score < _LOW_SCORE_THRESHOLD:
             recommendations_map = {
                 "complexity": [
                     "Take on more challenging technical problems",
@@ -453,17 +477,36 @@ class InsightsService:
         self, developer_id: int, insights: List[Dict[str, Any]], period_start: date, period_end: date
     ):
         """Save generated insights to database"""
+        # Get organization_id for this developer (default to 1)
+        developer = self.db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+        organization_id = developer.organization_id if developer else 1
+
         for insight_data in insights:
+            # Validate insight_type — only use recognized enum values
+            raw_type = insight_data.get("insight_type", "individual")
+            try:
+                insight_type = InsightType(raw_type)
+            except ValueError:
+                insight_type = InsightType.INDIVIDUAL
+
+            # Store extra metadata inside supporting_data JSON
+            supporting = dict(insight_data.get("supporting_data", {}))
+            supporting["confidence"] = insight_data.get("confidence", 0.5)
+            supporting["period_start"] = str(period_start)
+            supporting["period_end"] = str(period_end)
+
+            # Convert recommendations list to action_items format
+            recs = insight_data.get("recommendations", [])
+            action_items = [{"action": r, "assignee": "developer"} for r in recs]
+
             insight = AIInsight(
+                organization_id=organization_id,
                 developer_id=developer_id,
-                insight_type=InsightType(insight_data["insight_type"]),
+                insight_type=insight_type,
                 title=insight_data["title"],
                 description=insight_data["description"],
-                confidence_score=insight_data["confidence"],
-                recommendations=insight_data["recommendations"],
-                supporting_data=insight_data["supporting_data"],
-                period_start=period_start,
-                period_end=period_end,
+                supporting_data=supporting,
+                action_items=action_items,
             )
             self.db.add(insight)
 

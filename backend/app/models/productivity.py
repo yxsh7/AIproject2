@@ -1,5 +1,5 @@
 """Productivity scoring and AI insights models"""
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Date, Enum as SQLEnum
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Text, JSON, Date, Enum as SQLEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -25,8 +25,8 @@ class ProductivityScore(Base):
     # Overall score (0-100)
     overall_score = Column(Integer, nullable=False)
 
-    # Dimension scores (0-100)
-    code_quality_score = Column(Integer, nullable=True)
+    # Dimension scores (0-10 scale, stored as float-compatible integers)
+    quality_score = Column(Integer, nullable=True)
     complexity_score = Column(Integer, nullable=True)
     velocity_score = Column(Integer, nullable=True)
     impact_score = Column(Integer, nullable=True)
@@ -106,8 +106,8 @@ class AIInsight(Base):
     # If developer_id is NULL, it's a team/organization-level insight
 
     # Insight details
-    insight_type = Column(SQLEnum(InsightType), nullable=False, index=True)
-    priority = Column(SQLEnum(InsightPriority), default=InsightPriority.MEDIUM, nullable=False, index=True)
+    insight_type = Column(SQLEnum(InsightType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
+    priority = Column(SQLEnum(InsightPriority, values_callable=lambda x: [e.value for e in x]), default=InsightPriority.MEDIUM, nullable=False, index=True)
 
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
@@ -129,7 +129,7 @@ class AIInsight(Base):
     # ]
 
     # Status
-    acknowledged = Column(Integer, default=0)  # 0=False, 1=True
+    acknowledged = Column(Boolean, default=False)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     acknowledged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 

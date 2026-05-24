@@ -1,5 +1,5 @@
 """User model"""
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Enum as SQLEnum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -25,7 +25,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole, values_callable=lambda x: [e.value for e in x]), default=UserRole.DEVELOPER, nullable=False)
-    is_active = Column(Integer, default=1)  # Using Integer for boolean (1=True, 0=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1)

@@ -1,95 +1,128 @@
 #!/bin/bash
+# DevMetrics AI — one-command launcher
 
-# DevMetrics AI - System Startup Script
-# This script starts all services in the correct order with cost monitoring
-
-echo "🚀 DevMetrics AI - Safe Startup (Zero AI Costs)"
-echo "================================================"
-echo ""
-
-# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-# Check prerequisites
-echo -e "${BLUE}Step 1: Checking prerequisites...${NC}"
+echo ""
+echo -e "${BOLD}${BLUE}  DevMetrics AI${NC}  — Engineering Intelligence Platform"
+echo -e "  ${CYAN}───────────────────────────────────────────────${NC}"
+echo ""
 
-# Check PostgreSQL
-if ! pg_isready -q 2>/dev/null; then
-    echo -e "${RED}❌ PostgreSQL is not running${NC}"
-    echo "Start it with: brew services start postgresql (macOS)"
-    echo "Or: sudo systemctl start postgresql (Linux)"
-    exit 1
+# ── 1. Infrastructure ────────────────────────────────────────────────────────
+
+echo -e "${BLUE}[1/5]${NC} Starting infrastructure..."
+
+if docker info > /dev/null 2>&1; then
+  docker compose -f backend/docker-compose.yml up -d --quiet-pull 2>/dev/null \
+    && echo -e "  ${GREEN}✓${NC} Docker services up (postgres + redis)" \
+    || echo -e "  ${YELLOW}⚠${NC}  Docker compose failed — falling back to local services"
 else
-    echo -e "${GREEN}✅ PostgreSQL is running${NC}"
+  echo -e "  ${YELLOW}⚠${NC}  Docker not running — checking local services"
 fi
 
-# Check Redis
-if ! redis-cli ping > /dev/null 2>&1; then
-    echo -e "${RED}❌ Redis is not running${NC}"
-    echo "Start it with: brew services start redis (macOS)"
-    echo "Or: sudo systemctl start redis (Linux)"
-    exit 1
+# Verify postgres
+if pg_isready -q 2>/dev/null; then
+  echo -e "  ${GREEN}✓${NC} PostgreSQL reachable"
 else
-    echo -e "${GREEN}✅ Redis is running${NC}"
+  echo -e "  ${RED}✗${NC} PostgreSQL not reachable — start it or use Docker"
+  exit 1
 fi
 
-# Check if .env exists
+# Verify redis
+if redis-cli ping > /dev/null 2>&1; then
+  echo -e "  ${GREEN}✓${NC} Redis reachable"
+else
+  echo -e "  ${RED}✗${NC} Redis not reachable — start it or use Docker"
+  exit 1
+fi
+
+# ── 2. Environment check ──────────────────────────────────────────────────────
+
+echo ""
+echo -e "${BLUE}[2/5]${NC} Checking environment..."
+
+if [ -z "$VIRTUAL_ENV" ]; then
+  echo -e "  ${YELLOW}⚠${NC}  No Python venv active (VIRTUAL_ENV not set)"
+  echo -e "      Run: ${CYAN}source backend/venv/bin/activate${NC}"
+fi
+
 if [ ! -f "backend/.env" ]; then
-    echo -e "${YELLOW}⚠️  backend/.env not found${NC}"
-    echo "Creating from .env.example..."
-    cp backend/.env.example backend/.env
-    echo -e "${YELLOW}⚠️  Please edit backend/.env with your database credentials${NC}"
-    exit 1
-else
-    echo -e "${GREEN}✅ backend/.env exists${NC}"
+  echo -e "  ${RED}✗${NC} backend/.env not found"
+  echo -e "      Copy: ${CYAN}cp backend/.env.example backend/.env${NC} and fill in your credentials"
+  exit 1
 fi
 
-echo ""
-echo -e "${BLUE}Step 2: Running database migrations...${NC}"
-cd backend
-alembic upgrade head
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Database migrations complete${NC}"
-else
-    echo -e "${RED}❌ Database migration failed${NC}"
-    exit 1
-fi
-cd ..
+echo -e "  ${GREEN}✓${NC} backend/.env present"
+
+# ── 3. Database migration ────────────────────────────────────────────────────
 
 echo ""
-echo -e "${BLUE}Step 3: System is ready to start!${NC}"
+echo -e "${BLUE}[3/5]${NC} Running migrations..."
+
+(cd backend && alembic upgrade head) || {
+  echo -e "  ${RED}✗${NC} Migration failed"
+  exit 1
+}
+echo -e "  ${GREEN}✓${NC} Database up to date"
+
+# ── 4. Seed if empty ─────────────────────────────────────────────────────────
+
+USER_COUNT=$(cd backend && python -c "
+import os, sys
+sys.path.insert(0, '.')
+from dotenv import load_dotenv
+load_dotenv()
+from sqlalchemy import create_engine, text
+engine = create_engine(os.getenv('DATABASE_URL', ''))
+with engine.connect() as c:
+    print(c.execute(text('SELECT COUNT(*) FROM users')).scalar())
+" 2>/dev/null || echo "0")
+
+if [ "$USER_COUNT" = "0" ]; then
+  echo -e "  ${YELLOW}→${NC}  No users found — seeding demo data..."
+  (cd backend && python seed_data.py) && echo -e "  ${GREEN}✓${NC} Demo data seeded"
+else
+  echo -e "  ${GREEN}✓${NC} Database has data ($USER_COUNT users)"
+fi
+
+# ── 5. Start services ────────────────────────────────────────────────────────
+
 echo ""
-echo "⚠️  IMPORTANT: Cost Control Verification"
-echo "=========================================  "
+echo -e "${BLUE}[4/5]${NC} Starting backend..."
+(cd backend && uvicorn app.main:app --reload --port 8000) &
+BACKEND_PID=$!
+trap "kill $BACKEND_PID 2>/dev/null" EXIT SIGINT SIGTERM
+
+# Wait for backend to be ready
+for i in {1..15}; do
+  sleep 1
+  if curl -s http://localhost:8000/health > /dev/null 2>&1 || \
+     curl -s http://localhost:8000/docs  > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Backend ready"
+    break
+  fi
+  if [ $i -eq 15 ]; then
+    echo -e "  ${YELLOW}⚠${NC}  Backend taking longer than usual (continuing anyway)"
+  fi
+done
+
 echo ""
-echo "1. Celery Beat is DISABLED (no automatic tasks)"
-echo "2. All AI analysis is MANUAL only"
-echo "3. You control when OpenAI API is called"
+echo -e "${BLUE}[5/5]${NC} Starting frontend..."
 echo ""
-echo -e "${GREEN}To start the system, run these commands in separate terminals:${NC}"
+echo -e "  ${BOLD}────────────────────────────────────────${NC}"
+echo -e "  ${GREEN}✓${NC} App:        ${CYAN}http://localhost:3000${NC}"
+echo -e "  ${GREEN}✓${NC} API docs:   ${CYAN}http://localhost:8000/docs${NC}"
+echo -e ""
+echo -e "  ${BOLD}Demo credentials${NC}"
+echo -e "  Manager:   ${CYAN}manager@devmetrics.ai${NC} / ${CYAN}Manager123!${NC}"
+echo -e "  Developer: ${CYAN}dev1@devmetrics.ai${NC}     / ${CYAN}Dev123!${NC}"
+echo -e "  ${BOLD}────────────────────────────────────────${NC}"
 echo ""
-echo -e "${YELLOW}Terminal 1 - Backend API:${NC}"
-echo "  cd backend"
-echo "  uvicorn app.main:app --reload --port 8000"
-echo ""
-echo -e "${YELLOW}Terminal 2 - Celery Worker (NO BEAT):${NC}"
-echo "  cd backend"
-echo "  celery -A app.tasks.celery_app worker --loglevel=info"
-echo ""
-echo -e "${YELLOW}Terminal 3 - Frontend:${NC}"
-echo "  cd frontend"
-echo "  npm run dev"
-echo ""
-echo -e "${RED}DO NOT RUN: celery -A app.tasks.celery_app beat${NC}"
-echo -e "${RED}(Beat scheduler is disabled to prevent automatic costs)${NC}"
-echo ""
-echo -e "${BLUE}After starting, verify zero costs:${NC}"
-echo "1. Check OpenAI usage: https://platform.openai.com/usage"
-echo "2. Watch Celery logs for 'Analyzing' messages (should be NONE)"
-echo "3. Wait 10 minutes, check OpenAI usage again (should still be \$0.00)"
-echo ""
-echo -e "${GREEN}✅ System ready for safe testing!${NC}"
+
+(cd frontend && npm run dev)

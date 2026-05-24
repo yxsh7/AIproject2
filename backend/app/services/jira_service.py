@@ -1,6 +1,6 @@
 """Jira integration service for fetching developer activity"""
 from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from atlassian import Jira
 from sqlalchemy.orm import Session
 import logging
@@ -117,7 +117,7 @@ class JiraService:
 
         try:
             # Build JQL query
-            since_date = datetime.utcnow() - timedelta(days=days_back)
+            since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             date_str = since_date.strftime("%Y-%m-%d")
 
             jql_parts = [f'assignee = "{developer.jira_username}"']
@@ -308,7 +308,7 @@ class JiraService:
             Total number of comments synced
         """
         # Get all tickets for this developer from the last N days
-        since_date = datetime.utcnow() - timedelta(days=days_back)
+        since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
 
         tickets = (
             db.query(JiraTicket)

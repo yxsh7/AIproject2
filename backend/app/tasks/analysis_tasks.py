@@ -73,7 +73,7 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
             db.query(GitCommit)
             .filter(
                 GitCommit.developer_id == developer_id,
-                GitCommit.analyzed == False,
+                GitCommit.analyzed == 0,
             )
             .order_by(GitCommit.committed_at.desc())
             .limit(limit)
@@ -101,7 +101,7 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                     source_id=str(commit.id),
                 ).first()
                 if existing:
-                    commit.analyzed = True
+                    commit.analyzed = 1
                     continue
 
                 # Analyze commit
@@ -115,7 +115,7 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
                 # Save analysis result
                 commit.analysis_result = analysis
-                commit.analyzed = True
+                commit.analyzed = 1
 
                 # Create work activity
                 # support both old "impact_level" and new "impact" key names
@@ -212,7 +212,7 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
             db.query(JiraTicket)
             .filter(
                 JiraTicket.developer_id == developer_id,
-                JiraTicket.analyzed == False,
+                JiraTicket.analyzed == 0,
             )
             .order_by(JiraTicket.created_at.desc())
             .limit(limit)
@@ -240,7 +240,7 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                     source_id=str(ticket.id),
                 ).first()
                 if existing:
-                    ticket.analyzed = True
+                    ticket.analyzed = 1
                     continue
 
                 # Get ticket comments
@@ -258,7 +258,7 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
                 # Save classification result
                 ticket.analysis_result = classification
-                ticket.analyzed = True
+                ticket.analyzed = 1
 
                 # Create work activity
                 work_activity = WorkActivity(

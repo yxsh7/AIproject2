@@ -23,6 +23,34 @@ from app.services.slack_service import SlackService
 router = APIRouter()
 
 
+def _upsert_integration(
+    db: Session,
+    organization_id: int,
+    integration_type: IntegrationType,
+    config: dict,
+) -> IntegrationConfig:
+    """Create or update an integration config record."""
+    existing = (
+        db.query(IntegrationConfig)
+        .filter_by(organization_id=organization_id, type=integration_type)
+        .first()
+    )
+    if existing:
+        existing.config = config
+        existing.status = IntegrationStatus.ACTIVE
+    else:
+        existing = IntegrationConfig(
+            organization_id=organization_id,
+            type=integration_type,
+            status=IntegrationStatus.ACTIVE,
+            config=config,
+        )
+        db.add(existing)
+    db.commit()
+    db.refresh(existing)
+    return existing
+
+
 @router.post("/github", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
 def create_github_integration(
     integration_data: GitHubIntegrationCreate,
@@ -66,43 +94,10 @@ def create_github_integration(
             detail=f"GitHub connection error: {str(e)}",
         )
 
-    # Check if GitHub integration already exists for this org
-    existing = (
-        db.query(IntegrationConfig)
-        .filter(
-            IntegrationConfig.organization_id == organization_id,
-            IntegrationConfig.type == IntegrationType.GITHUB,
-        )
-        .first()
-    )
-
-    if existing:
-        # Update existing integration
-        existing.config = {
-            "organization_name": integration_data.organization_name,
-            "access_token": integration_data.access_token,
-        }
-        existing.status = IntegrationStatus.ACTIVE
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    # Create new integration
-    integration = IntegrationConfig(
-        organization_id=organization_id,
-        type=IntegrationType.GITHUB,
-        status=IntegrationStatus.ACTIVE,
-        config={
-            "organization_name": integration_data.organization_name,
-            "access_token": integration_data.access_token,
-        },
-    )
-
-    db.add(integration)
-    db.commit()
-    db.refresh(integration)
-
-    return integration
+    return _upsert_integration(db, organization_id, IntegrationType.GITHUB, {
+        "organization_name": integration_data.organization_name,
+        "access_token": integration_data.access_token,
+    })
 
 
 @router.post("/jira", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
@@ -152,47 +147,12 @@ def create_jira_integration(
             detail=f"Jira connection error: {str(e)}",
         )
 
-    # Check if Jira integration already exists
-    existing = (
-        db.query(IntegrationConfig)
-        .filter(
-            IntegrationConfig.organization_id == organization_id,
-            IntegrationConfig.type == IntegrationType.JIRA,
-        )
-        .first()
-    )
-
-    if existing:
-        # Update existing integration
-        existing.config = {
-            "url": str(integration_data.workspace_url),
-            "username": integration_data.username,
-            "api_token": integration_data.api_token,
-            "project_keys": integration_data.project_keys or [],
-        }
-        existing.status = IntegrationStatus.ACTIVE
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    # Create new integration
-    integration = IntegrationConfig(
-        organization_id=organization_id,
-        type=IntegrationType.JIRA,
-        status=IntegrationStatus.ACTIVE,
-        config={
-            "url": str(integration_data.workspace_url),
-            "username": integration_data.username,
-            "api_token": integration_data.api_token,
-            "project_keys": integration_data.project_keys or [],
-        },
-    )
-
-    db.add(integration)
-    db.commit()
-    db.refresh(integration)
-
-    return integration
+    return _upsert_integration(db, organization_id, IntegrationType.JIRA, {
+        "url": str(integration_data.workspace_url),
+        "username": integration_data.username,
+        "api_token": integration_data.api_token,
+        "project_keys": integration_data.project_keys or [],
+    })
 
 
 @router.post("/slack", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
@@ -214,32 +174,10 @@ def create_slack_integration(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Slack connection error: {str(e)}")
 
-    existing = (
-        db.query(IntegrationConfig)
-        .filter(
-            IntegrationConfig.organization_id == organization_id,
-            IntegrationConfig.type == IntegrationType.SLACK,
-        )
-        .first()
-    )
-
-    if existing:
-        existing.config = {"bot_token": integration_data.bot_token, "channel_ids": integration_data.channel_ids}
-        existing.status = IntegrationStatus.ACTIVE
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    integration = IntegrationConfig(
-        organization_id=organization_id,
-        type=IntegrationType.SLACK,
-        status=IntegrationStatus.ACTIVE,
-        config={"bot_token": integration_data.bot_token, "channel_ids": integration_data.channel_ids},
-    )
-    db.add(integration)
-    db.commit()
-    db.refresh(integration)
-    return integration
+    return _upsert_integration(db, organization_id, IntegrationType.SLACK, {
+        "bot_token": integration_data.bot_token,
+        "channel_ids": integration_data.channel_ids,
+    })
 
 
 @router.get("/", response_model=List[IntegrationResponse])

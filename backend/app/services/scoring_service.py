@@ -76,23 +76,75 @@ class ProductivityScoringService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _compute_score(
+        self,
+        developer: DeveloperProfile,
+        activities: List[WorkActivity],
+        start_date: date,
+        end_date: date,
+    ) -> Optional[ProductivityScore]:
+        """Compute a ProductivityScore from pre-fetched activities (no DB queries)."""
+        if not activities:
+            return None
+
+        complexity_score = self._calculate_complexity_score(activities)
+        velocity_score = self._calculate_velocity_score(activities, start_date, end_date)
+        quality_score = self._calculate_quality_score(activities)
+        impact_score = self._calculate_impact_score(activities)
+        collaboration_score = self._calculate_collaboration_score(activities)
+        mentoring_score = self._calculate_mentoring_score(activities)
+
+        weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS[RoleLevel.MID])
+
+        overall_score = (
+            complexity_score * weights["complexity"]
+            + velocity_score * weights["velocity"]
+            + quality_score * weights["quality"]
+            + impact_score * weights["impact"]
+            + collaboration_score * weights["collaboration"]
+            + mentoring_score * weights["mentoring"]
+        ) * 10  # Scale to 0-100
+
+        work_breakdown = self._calculate_work_breakdown(activities)
+
+        return ProductivityScore(
+            developer_id=developer.id,
+            period_start=start_date,
+            period_end=end_date,
+            period_type="monthly",
+            overall_score=round(overall_score, 2),
+            complexity_score=round(complexity_score, 2),
+            velocity_score=round(velocity_score, 2),
+            quality_score=round(quality_score, 2),
+            impact_score=round(impact_score, 2),
+            collaboration_score=round(collaboration_score, 2),
+            mentoring_score=round(mentoring_score, 2),
+            breakdown={
+                "total_activities": len(activities),
+                "work_type_distribution": work_breakdown,
+                "role_weights": weights,
+            },
+            total_commits=self._count_by_source(activities, "git"),
+            total_prs=0,
+            total_tickets=self._count_by_source(activities, "jira"),
+            lines_added=0,
+            lines_deleted=0,
+            work_breakdown=work_breakdown,
+            score_metadata={
+                "role_level": developer.role_level.value,
+                "evaluation_weights": weights,
+                "activity_count": len(activities),
+                "days_active": len(set(a.activity_date for a in activities)),
+            },
+        )
+
     def calculate_developer_score(
         self,
         developer_id: int,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> Optional[ProductivityScore]:
-        """
-        Calculate comprehensive productivity score for a developer
-
-        Args:
-            developer_id: Developer profile ID
-            start_date: Start of evaluation period (default: 30 days ago)
-            end_date: End of evaluation period (default: today)
-
-        Returns:
-            ProductivityScore object or None if no activities
-        """
+        """Calculate productivity score for a developer over a time period."""
         developer = self.db.query(DeveloperProfile).filter(
             DeveloperProfile.id == developer_id
         ).first()
@@ -101,13 +153,11 @@ class ProductivityScoringService:
             logger.error(f"Developer {developer_id} not found")
             return None
 
-        # Default to last 30 days
         if not end_date:
             end_date = date.today()
         if not start_date:
             start_date = end_date - timedelta(days=30)
 
-        # Get all work activities in period
         activities = (
             self.db.query(WorkActivity)
             .filter(
@@ -122,63 +172,7 @@ class ProductivityScoringService:
             logger.info(f"No activities found for developer {developer_id}")
             return None
 
-        # Calculate component scores
-        complexity_score = self._calculate_complexity_score(activities)
-        velocity_score = self._calculate_velocity_score(activities, start_date, end_date)
-        quality_score = self._calculate_quality_score(activities)
-        impact_score = self._calculate_impact_score(activities)
-        collaboration_score = self._calculate_collaboration_score(activities)
-        mentoring_score = self._calculate_mentoring_score(activities)
-
-        # Get role-based weights
-        weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS[RoleLevel.MID])
-
-        # Calculate weighted overall score
-        overall_score = (
-            complexity_score * weights["complexity"]
-            + velocity_score * weights["velocity"]
-            + quality_score * weights["quality"]
-            + impact_score * weights["impact"]
-            + collaboration_score * weights["collaboration"]
-            + mentoring_score * weights["mentoring"]
-        ) * 10  # Scale to 0-100
-
-        # Calculate work type distribution
-        work_breakdown = self._calculate_work_breakdown(activities)
-
-        # Create or update productivity score
-        score = ProductivityScore(
-            developer_id=developer_id,
-            period_start=start_date,
-            period_end=end_date,
-            period_type="monthly",  # Default period type
-            overall_score=round(overall_score, 2),
-            complexity_score=round(complexity_score, 2),
-            velocity_score=round(velocity_score, 2),
-            quality_score=round(quality_score, 2),
-            impact_score=round(impact_score, 2),
-            collaboration_score=round(collaboration_score, 2),
-            mentoring_score=round(mentoring_score, 2),
-            breakdown={
-                "total_activities": len(activities),
-                "work_type_distribution": work_breakdown,
-                "role_weights": weights,
-            },
-            total_commits=self._count_by_source(activities, "git"),
-            total_prs=0,  # Will calculate separately if needed
-            total_tickets=self._count_by_source(activities, "jira"),
-            lines_added=0,  # Can aggregate from commits
-            lines_deleted=0,  # Can aggregate from commits
-            work_breakdown=work_breakdown,
-            score_metadata={
-                "role_level": developer.role_level.value,
-                "evaluation_weights": weights,
-                "activity_count": len(activities),
-                "days_active": len(set(a.activity_date for a in activities)),
-            },
-        )
-
-        return score
+        return self._compute_score(developer, activities, start_date, end_date)
 
     def _calculate_complexity_score(self, activities: List[WorkActivity]) -> float:
         """Calculate average complexity score (0-10)"""
@@ -385,11 +379,30 @@ class ProductivityScoringService:
         if not developers:
             return {"error": "No developers found in team"}
 
-        # Calculate scores for each developer
+        if not end_date:
+            end_date = date.today()
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+
+        # Bulk-fetch all activities for the whole team in a single query (avoids N+1)
+        dev_ids = [d.id for d in developers]
+        all_activities = (
+            self.db.query(WorkActivity)
+            .filter(
+                WorkActivity.developer_id.in_(dev_ids),
+                WorkActivity.activity_date >= start_date,
+                WorkActivity.activity_date <= end_date,
+            )
+            .all()
+        )
+        activities_by_dev: Dict[int, List[WorkActivity]] = {}
+        for a in all_activities:
+            activities_by_dev.setdefault(a.developer_id, []).append(a)
+
         individual_scores = []
         for developer in developers:
-            score = self.calculate_developer_score(
-                developer.id, start_date, end_date
+            score = self._compute_score(
+                developer, activities_by_dev.get(developer.id, []), start_date, end_date
             )
             if score:
                 individual_scores.append({
@@ -413,8 +426,8 @@ class ProductivityScoringService:
         aggregate = {
             "team": team,
             "team_size": team_size,
-            "period_start": start_date or (date.today() - timedelta(days=30)),
-            "period_end": end_date or date.today(),
+            "period_start": start_date,
+            "period_end": end_date,
             "average_overall_score": round(
                 sum(s["overall_score"] for s in individual_scores) / team_size, 2
             ),
@@ -492,6 +505,6 @@ class ProductivityScoringService:
         return (
             self.db.query(ProductivityScore)
             .filter(ProductivityScore.developer_id == developer_id)
-            .order_by(ProductivityScore.created_at.desc())
+            .order_by(ProductivityScore.calculated_at.desc())
             .first()
         )

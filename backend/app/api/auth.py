@@ -54,7 +54,7 @@ def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token_for_user(user)
 
     return UserWithToken(
-        user=UserResponse.from_orm(user), access_token=access_token, token_type="bearer"
+        user=UserResponse.model_validate(user), access_token=access_token, token_type="bearer"
     )
 
 
@@ -89,7 +89,7 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token_for_user(user)
 
     return UserWithToken(
-        user=UserResponse.from_orm(user), access_token=access_token, token_type="bearer"
+        user=UserResponse.model_validate(user), access_token=access_token, token_type="bearer"
     )
 
 
@@ -104,4 +104,4 @@ def get_current_user_info(current_user: User = Depends(get_current_active_user))
     Returns:
         Current user information
     """
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)

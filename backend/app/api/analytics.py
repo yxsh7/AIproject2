@@ -1,8 +1,11 @@
 """Analytics and productivity API endpoints"""
+import logging
 from typing import List, Optional
 from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.schemas.analytics import (
@@ -20,10 +23,13 @@ from app.schemas.analytics import (
     TrendDataPoint,
     TeamMemberScore,
     ComparisonData,
+    InsightResponse,
 )
 from app.models import User, DeveloperProfile, WorkActivity, ProductivityScore
+from app.models.developer import RoleLevel
 from app.api.dependencies import get_current_active_user
 from app.services.scoring_service import ProductivityScoringService, ROLE_WEIGHTS
+from app.services.insights_service import InsightsService
 
 router = APIRouter()
 
@@ -31,28 +37,43 @@ router = APIRouter()
 def check_analytics_access(
     current_user: User, developer_id: int, db: Session
 ) -> bool:
-    """
-    Check if user has access to developer's analytics
-
-    Rules:
-    - Developers can see their own analytics
-    - Managers can see all analytics
-    - Admins can see all analytics
-    """
+    """Check if user has access to developer's analytics."""
     if current_user.role in ["manager", "admin"]:
         return True
+    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    return developer is not None and developer.user_id == current_user.id
 
-    # Check if developer is viewing their own profile
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
 
-    if developer and developer.user_id == current_user.id:
-        return True
+def _get_developer_or_raise(
+    developer_id: int, current_user: User, db: Session
+) -> DeveloperProfile:
+    """Fetch developer by id, raising 403/404 as appropriate."""
+    if not check_analytics_access(current_user, developer_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this developer's analytics",
+        )
+    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    if not developer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found")
+    return developer
 
-    return False
+
+def _resolve_dates(
+    developer_id: int, start_date: date, end_date: date, db: Session
+) -> tuple:
+    """If the default 30-day window has no data, shift to the most recent activity window."""
+    if start_date == end_date - timedelta(days=30):
+        latest = (
+            db.query(WorkActivity)
+            .filter(WorkActivity.developer_id == developer_id)
+            .order_by(WorkActivity.activity_date.desc())
+            .first()
+        )
+        if latest and latest.activity_date < start_date:
+            end_date = latest.activity_date
+            start_date = end_date - timedelta(days=30)
+    return start_date, end_date
 
 
 @router.get("/developers/{developer_id}/overview", response_model=DeveloperAnalyticsOverview)
@@ -79,37 +100,21 @@ def get_developer_overview(
     Raises:
         HTTPException: If user doesn't have access or developer not found
     """
-    # Check access
-    if not check_analytics_access(current_user, developer_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this developer's analytics",
-        )
+    developer = _get_developer_or_raise(developer_id, current_user, db)
 
-    # Get developer
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
-
-    # Default dates
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    # Get productivity score
+    # Get most recent saved productivity score (avoids unsaved object with id=None)
     scoring_service = ProductivityScoringService(db)
-    productivity_score = scoring_service.calculate_developer_score(
-        developer_id, start_date, end_date
-    )
+    productivity_score = scoring_service.get_latest_score(developer_id)
+    # If no saved score exists yet, calculate and save one now
+    if not productivity_score:
+        new_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+        if new_score:
+            productivity_score = scoring_service.save_score(new_score)
 
     # Get activity summary
     activities = (
@@ -139,7 +144,13 @@ def get_developer_overview(
         else 0,
     }
 
-    work_breakdown = productivity_score.work_breakdown if productivity_score else {}
+    work_breakdown = (productivity_score.work_breakdown or {}) if productivity_score else {}
+
+    # Explicitly validate ORM → Pydantic to avoid implicit coercion issues
+    score_response = (
+        ProductivityScoreResponse.model_validate(productivity_score)
+        if productivity_score else None
+    )
 
     return DeveloperAnalyticsOverview(
         developer_id=developer.id,
@@ -148,7 +159,7 @@ def get_developer_overview(
         team=developer.team,
         period_start=start_date,
         period_end=end_date,
-        productivity_score=productivity_score,
+        productivity_score=score_response,
         activity_summary=activity_summary,
         work_breakdown=work_breakdown,
     )
@@ -177,37 +188,19 @@ def get_developer_productivity(
     Returns:
         Detailed productivity analytics
     """
-    # Check access
-    if not check_analytics_access(current_user, developer_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this developer's analytics",
-        )
+    developer = _get_developer_or_raise(developer_id, current_user, db)
 
-    # Get developer
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
-
-    # Default dates
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    # Calculate productivity score
     scoring_service = ProductivityScoringService(db)
-    productivity_score = scoring_service.calculate_developer_score(
-        developer_id, start_date, end_date
-    )
+    productivity_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+
+    if not productivity_score:
+        start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
+        productivity_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
 
     if not productivity_score:
         raise HTTPException(
@@ -215,7 +208,6 @@ def get_developer_productivity(
             detail="No activity data found for this period",
         )
 
-    # Score breakdown
     score_breakdown = {
         "complexity": productivity_score.complexity_score,
         "velocity": productivity_score.velocity_score,
@@ -225,8 +217,7 @@ def get_developer_productivity(
         "mentoring": productivity_score.mentoring_score,
     }
 
-    # Evaluation weights
-    weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS["mid"])
+    weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS[RoleLevel.MID])
 
     # Activity stats
     activity_stats = productivity_score.score_metadata or {}
@@ -306,25 +297,7 @@ def get_developer_trends(
     Returns:
         Historical trends data
     """
-    # Check access
-    if not check_analytics_access(current_user, developer_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this developer's analytics",
-        )
-
-    # Get developer
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
+    developer = _get_developer_or_raise(developer_id, current_user, db)
 
     # Get trends
     scoring_service = ProductivityScoringService(db)
@@ -380,33 +353,13 @@ def get_work_breakdown(
     Returns:
         Work breakdown by type, complexity, and source
     """
-    # Check access
-    if not check_analytics_access(current_user, developer_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this developer's analytics",
-        )
+    developer = _get_developer_or_raise(developer_id, current_user, db)
 
-    # Get developer
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
-
-    # Default dates
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    # Get activities
     activities = (
         db.query(WorkActivity)
         .filter(
@@ -417,6 +370,19 @@ def get_work_breakdown(
         .order_by(WorkActivity.activity_date.desc())
         .all()
     )
+
+    if not activities:
+        start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
+        activities = (
+            db.query(WorkActivity)
+            .filter(
+                WorkActivity.developer_id == developer_id,
+                WorkActivity.activity_date >= start_date,
+                WorkActivity.activity_date <= end_date,
+            )
+            .order_by(WorkActivity.activity_date.desc())
+            .all()
+        )
 
     if not activities:
         raise HTTPException(
@@ -622,34 +588,12 @@ def get_developer_insights(
     Returns:
         AI-generated insights and recommendations
     """
-    # Check access
-    if not check_analytics_access(current_user, developer_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this developer's insights",
-        )
+    developer = _get_developer_or_raise(developer_id, current_user, db)
 
-    # Get developer
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
-
-    # Default dates
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
-
-    # Import here to avoid circular imports
-    from app.services.insights_service import InsightsService
 
     insights_service = InsightsService(db)
 
@@ -668,20 +612,32 @@ def get_developer_insights(
         # Try to get recent cached insights
         recent_insights = insights_service.get_recent_insights(developer_id, limit=20)
 
-        # Filter by date range
+        # Filter by date range using supporting_data period fields
         insights_data = []
         for insight in recent_insights:
-            if (
-                insight.period_start >= start_date
-                and insight.period_end <= end_date
-            ):
+            sd = insight.supporting_data or {}
+            i_start_str = sd.get("period_start")
+            i_end_str = sd.get("period_end")
+            # Include insight if dates overlap or no period stored
+            include = True
+            if i_start_str and i_end_str:
+                try:
+                    i_start = date.fromisoformat(i_start_str)
+                    i_end = date.fromisoformat(i_end_str)
+                    include = not (i_end < start_date or i_start > end_date)
+                except (ValueError, TypeError):
+                    include = True
+            if include:
+                # Rebuild recommendations from action_items
+                action_items = insight.action_items or []
+                recs = [a["action"] for a in action_items if isinstance(a, dict) and "action" in a]
                 insights_data.append({
                     "insight_type": insight.insight_type.value,
                     "title": insight.title,
                     "description": insight.description,
-                    "confidence": insight.confidence_score,
-                    "recommendations": insight.recommendations,
-                    "supporting_data": insight.supporting_data or {},
+                    "confidence": sd.get("confidence", 0.5),
+                    "recommendations": recs,
+                    "supporting_data": {k: v for k, v in sd.items() if k not in ("confidence", "period_start", "period_end")},
                 })
 
         # If no cached insights, generate new ones
@@ -710,9 +666,6 @@ def get_developer_insights(
         if insight["insight_type"] in ["anomaly", "collaboration_gap"]
     ]
 
-    # Convert to response format
-    from app.schemas.analytics import InsightResponse
-
     insights = [InsightResponse(**insight) for insight in insights_data]
 
     return DeveloperInsightsResponse(
@@ -726,30 +679,66 @@ def get_developer_insights(
     )
 
 
+def _run_analysis_pipeline(developer_id: int, limit: int) -> None:
+    """
+    Background task: run AI analysis then recalculate scores and insights.
+    Creates its own DB session since it runs after the HTTP response is sent.
+    """
+    from app.tasks.analysis_tasks import analyze_git_commits, analyze_jira_tickets
+    from app.services.scoring_service import ProductivityScoringService
+    from app.services.insights_service import InsightsService
+    from app.database import SessionLocal
+
+    # Step 1: AI analysis (tasks manage their own DB sessions internally)
+    try:
+        commit_result = analyze_git_commits(developer_id, limit=limit)
+        logger.info(f"Commits analyzed: {commit_result}")
+    except Exception as e:
+        logger.error(f"Commit analysis failed for developer {developer_id}: {e}")
+
+    try:
+        ticket_result = analyze_jira_tickets(developer_id, limit=limit)
+        logger.info(f"Tickets analyzed: {ticket_result}")
+    except Exception as e:
+        logger.error(f"Ticket analysis failed for developer {developer_id}: {e}")
+
+    # Step 2: Recalculate and save productivity score
+    db = SessionLocal()
+    try:
+        end_date = date.today()
+        start_date = end_date - timedelta(days=90)  # Wide window to capture seeded data
+        scoring_service = ProductivityScoringService(db)
+        score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+        if score:
+            scoring_service.save_score(score)
+            logger.info(f"Saved updated score for developer {developer_id}: {score.overall_score}")
+
+        # Step 3: Generate and save insights
+        insights_service = InsightsService(db)
+        insights = insights_service.generate_developer_insights(developer_id, start_date, end_date)
+        if insights:
+            insights_service.save_insights(developer_id, insights, start_date, end_date)
+            logger.info(f"Saved {len(insights)} insights for developer {developer_id}")
+    except Exception as e:
+        logger.error(f"Post-analysis scoring/insights failed for developer {developer_id}: {e}")
+    finally:
+        db.close()
+
+
 @router.post("/developers/{developer_id}/analyze")
 def trigger_ai_analysis(
     developer_id: int,
+    background_tasks: BackgroundTasks,
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Manually trigger AI analysis for a developer (COSTS MONEY - use sparingly)
+    Manually trigger AI analysis for a developer.
 
-    This endpoint triggers AI analysis of unanalyzed commits and tickets.
-    Only use this when you want to analyze new data.
-
-    Args:
-        developer_id: Developer profile ID
-        limit: Maximum number of items to analyze (default: 50)
-        db: Database session
-        current_user: Current authenticated user (manager/admin only)
-
-    Returns:
-        Job IDs for the triggered analysis tasks
-
-    Raises:
-        HTTPException: If user doesn't have permission
+    Runs AI analysis of unanalyzed commits and tickets in the background,
+    then recalculates productivity scores and generates insights.
+    Returns immediately; check the overview endpoint after a few seconds.
     """
     # Only managers and admins can trigger AI analysis
     if current_user.role not in ["manager", "admin"]:
@@ -771,18 +760,13 @@ def trigger_ai_analysis(
             detail="Developer not found",
         )
 
-    # Import analysis tasks
-    from app.tasks.analysis_tasks import analyze_git_commits, analyze_jira_tickets
-
-    # Trigger AI analysis tasks
-    commit_job = analyze_git_commits.delay(developer_id, limit=limit)
-    ticket_job = analyze_jira_tickets.delay(developer_id, limit=limit)
+    developer_name = developer.user.full_name if developer.user else f"developer {developer_id}"
+    background_tasks.add_task(_run_analysis_pipeline, developer_id, limit)
 
     return {
-        "message": f"AI analysis triggered for {developer.user.full_name if developer.user else f'developer {developer_id}'}",
-        "warning": "This will incur AI API costs (approximately $0.01 per 100 items)",
-        "commit_analysis_job_id": str(commit_job.id),
-        "ticket_analysis_job_id": str(ticket_job.id),
-        "max_items_to_analyze": limit,
-        "estimated_cost_usd": round((limit / 100) * 0.01, 4),
+        "message": f"AI analysis started for {developer_name}",
+        "developer_id": developer_id,
+        "max_items": limit,
+        "status": "running",
+        "note": "Analysis runs in background. Refresh overview in a few seconds to see updated scores.",
     }

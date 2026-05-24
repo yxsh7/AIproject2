@@ -1,10 +1,10 @@
 """Background tasks for syncing data from GitHub, Jira, and Slack"""
 import logging
-from datetime import datetime
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
+from sqlalchemy.orm import Session
 from app.models import (
     IntegrationConfig,
     IntegrationType,
@@ -16,16 +16,6 @@ from app.services.jira_service import JiraService
 from app.services.slack_service import SlackService
 
 logger = logging.getLogger(__name__)
-
-
-def get_db():
-    """Get database session for tasks"""
-    db = SessionLocal()
-    try:
-        return db
-    except Exception as e:
-        db.close()
-        raise e
 
 
 @celery_app.task(name="app.tasks.sync_tasks.sync_integration_task")
@@ -40,7 +30,7 @@ def sync_integration_task(integration_id: int, days_back: int = 30):
     Returns:
         Dict with sync results
     """
-    db = get_db()
+    db = SessionLocal()
 
     try:
         integration = (
@@ -74,7 +64,7 @@ def sync_integration_task(integration_id: int, days_back: int = 30):
             integration.last_error = result["error"]
         else:
             integration.status = IntegrationStatus.ACTIVE
-            integration.last_sync_at = datetime.utcnow()
+            integration.last_sync_at = datetime.now(timezone.utc)
             integration.last_error = None
 
         db.commit()
@@ -281,7 +271,7 @@ def sync_all_github():
     """
     Periodic task to sync all GitHub integrations
     """
-    db = get_db()
+    db = SessionLocal()
 
     try:
         # Get all active GitHub integrations
@@ -303,7 +293,7 @@ def sync_all_github():
                 results.append({"integration_id": integration.id, "result": result})
 
                 # Update last_sync_at
-                integration.last_sync_at = datetime.utcnow()
+                integration.last_sync_at = datetime.now(timezone.utc)
                 db.commit()
 
             except Exception as e:
@@ -321,7 +311,7 @@ def sync_all_jira():
     """
     Periodic task to sync all Jira integrations
     """
-    db = get_db()
+    db = SessionLocal()
 
     try:
         # Get all active Jira integrations
@@ -343,7 +333,7 @@ def sync_all_jira():
                 results.append({"integration_id": integration.id, "result": result})
 
                 # Update last_sync_at
-                integration.last_sync_at = datetime.utcnow()
+                integration.last_sync_at = datetime.now(timezone.utc)
                 db.commit()
 
             except Exception as e:
@@ -359,7 +349,7 @@ def sync_all_jira():
 @celery_app.task(name="app.tasks.sync_tasks.sync_all_slack")
 def sync_all_slack():
     """Periodic task to sync all Slack integrations."""
-    db = get_db()
+    db = SessionLocal()
 
     try:
         integrations = (
@@ -377,7 +367,7 @@ def sync_all_slack():
         for integration in integrations:
             try:
                 result = sync_slack_integration(db, integration, days_back=7)
-                integration.last_sync_at = datetime.utcnow()
+                integration.last_sync_at = datetime.now(timezone.utc)
                 db.commit()
                 results.append({"integration_id": integration.id, "result": result})
             except Exception as e:

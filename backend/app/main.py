@@ -14,17 +14,17 @@ from app.api import auth, developers, integrations, analytics
 async def lifespan(app: FastAPI):
     """Lifecycle events for the application"""
     # Startup
-    print("🚀 Starting DevMetrics AI...")
-    print(f"📊 Database: {settings.DATABASE_URL.split('@')[-1]}")  # Hide credentials
+    print("Starting DevMetrics AI...")
+    print(f"Database: {settings.DATABASE_URL.split('@')[-1]}")  # Hide credentials
 
     # Initialize database tables
     init_db()
-    print("✅ Database initialized")
+    print("Database initialized")
 
     yield
 
     # Shutdown
-    print("👋 Shutting down DevMetrics AI...")
+    print("Shutting down DevMetrics AI...")
 
 
 # Create FastAPI app

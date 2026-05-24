@@ -64,7 +64,7 @@ class AuthService:
             hashed_password=hashed_password,
             full_name=full_name,
             role=role,
-            is_active=1,
+            is_active=True,
             organization_id=organization_id,
         )
 

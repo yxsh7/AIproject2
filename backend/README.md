@@ -144,7 +144,7 @@ backend/
 
 ## Database Schema
 
-See `IMPLEMENTATION_PLAN.md` for complete schema documentation.
+See `alembic/versions/` for schema migrations and `app/models/` for full model definitions.
 
 ## Development
 

@@ -1,6 +1,6 @@
 """GitHub integration service for fetching developer activity"""
 from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from github import Github, Auth, GithubException
 from sqlalchemy.orm import Session
 import logging
@@ -47,18 +47,27 @@ class GitHubService:
             raise ValueError("GitHub access token not found in config")
         return cls(access_token=token)
 
-    def _get_repos(self, org_name: str = None):
-        """Get repos for an org, personal username, or authenticated user."""
+    def _get_repos(self, org_name: str = None, repo_name: str = None):
+        """Get repos for an org/user, or a single repo if repo_name is specified.
+
+        Args:
+            org_name: GitHub org or personal username
+            repo_name: Optional full repo name (e.g. 'user/repo') to scope sync to one repo
+        """
+        if repo_name:
+            try:
+                return [self.client.get_repo(repo_name)]
+            except GithubException as e:
+                logger.error(f"Could not fetch repo '{repo_name}': {e}")
+                return []
         if not org_name:
             return self.client.get_user().get_repos()
         try:
             return self.client.get_organization(org_name).get_repos()
         except GithubException:
-            # Not an org — try as a personal username
             try:
                 return self.client.get_user(org_name).get_repos()
             except GithubException:
-                # Fall back to authenticated user's own repos
                 logger.warning(f"Could not find org or user '{org_name}', using authenticated user repos")
                 return self.client.get_user().get_repos()
 
@@ -108,6 +117,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repo_name: str = None,
     ) -> int:
         """
         Sync commits for a developer from all org repositories
@@ -127,8 +137,8 @@ class GitHubService:
 
         try:
             # Handle both organization and personal accounts
-            repos = self._get_repos(org_name)
-            since_date = datetime.utcnow() - timedelta(days=days_back)
+            repos = self._get_repos(org_name, repo_name=repo_name)
+            since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             commits_synced = 0
 
             for repo in repos:
@@ -186,6 +196,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repo_name: str = None,
     ) -> int:
         """
         Sync pull requests created by a developer
@@ -204,8 +215,8 @@ class GitHubService:
             return 0
 
         try:
-            repos = self._get_repos(org_name)
-            since_date = datetime.utcnow() - timedelta(days=days_back)
+            repos = self._get_repos(org_name, repo_name=repo_name)
+            since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             prs_synced = 0
 
             for repo in repos:
@@ -281,6 +292,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repo_name: str = None,
     ) -> int:
         """
         Sync code reviews given by a developer
@@ -299,8 +311,8 @@ class GitHubService:
             return 0
 
         try:
-            repos = self._get_repos(org_name)
-            since_date = datetime.utcnow() - timedelta(days=days_back)
+            repos = self._get_repos(org_name, repo_name=repo_name)
+            since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             reviews_synced = 0
 
             for repo in repos:
@@ -386,6 +398,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repo_name: str = None,
     ) -> Dict[str, int]:
         """
         Sync all GitHub activity for a developer
@@ -395,22 +408,24 @@ class GitHubService:
             developer: DeveloperProfile instance
             org_name: GitHub organization name
             days_back: Number of days to look back
+            repo_name: Optional full repo name to limit sync to one repo (e.g. 'user/repo')
 
         Returns:
             Dict with counts of synced items
         """
         logger.info(
             f"Starting full GitHub sync for developer {developer.github_username}"
+            + (f" (repo: {repo_name})" if repo_name else "")
         )
 
         commits_count = self.sync_commits_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repo_name=repo_name
         )
         prs_count = self.sync_pull_requests_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repo_name=repo_name
         )
         reviews_count = self.sync_code_reviews_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repo_name=repo_name
         )
 
         return {

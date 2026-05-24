@@ -1,99 +1,22 @@
-"""Code Complexity Analyzer Agent using AI (OpenAI or Anthropic)"""
-import json
+"""Code Complexity Analyzer Agent"""
 import logging
 from typing import Dict, Any, Optional
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.ai.base import get_ai_chat_model, extract_json
 from app.ai.prompts.analysis_prompts import CODE_COMPLEXITY_PROMPT
 
 logger = logging.getLogger(__name__)
 
 
-class CodeAnalysisResult(BaseModel):
-    """Pydantic model for code analysis results"""
-
-    complexity_score: int = Field(..., ge=0, le=10, description="Cognitive complexity score")
-    quality_score: int = Field(..., ge=0, le=10, description="Code quality score")
-    impact_level: str = Field(..., description="Impact level: low, medium, high, critical")
-    work_type: str = Field(..., description="Type of work")
-    technical_debt_delta: int = Field(..., description="Tech debt added (+) or removed (-)")
-    affected_systems: list[str] = Field(default_factory=list, description="Systems affected")
-    novelty: str = Field(..., description="Novelty level: routine, moderate, high")
-    explanation: str = Field(..., description="Explanation of analysis")
-
-
 class CodeComplexityAnalyzer:
-    """Analyzes git commits for complexity and quality using AI (OpenAI or Anthropic)"""
+    """Analyzes git commits for complexity and quality using AI with rule-based fallback"""
 
-    def __init__(
-        self,
-        provider: Optional[str] = None,
-        model_name: Optional[str] = None,
-        api_key: Optional[str] = None,
-    ):
-        """
-        Initialize the Code Complexity Analyzer
-
-        Args:
-            provider: AI provider ("openai" or "anthropic") - defaults to settings
-            model_name: Model name - defaults to settings (gpt-4o-mini recommended for cost)
-            api_key: API key - defaults to settings based on provider
-        """
-        self.provider = provider or settings.AI_MODEL_PROVIDER
-        self.model_name = model_name or settings.AI_MODEL_NAME
-
-        # Initialize the appropriate LLM
-        if self.provider == "openai":
-            api_key = api_key or settings.OPENAI_API_KEY
-            if not api_key:
-                raise ValueError("OpenAI API key is required")
-
-            llm_kwargs = {
-                "model": self.model_name,
-                "openai_api_key": api_key,
-                "temperature": settings.AI_MODEL_TEMPERATURE,
-                "max_tokens": settings.AI_MODEL_MAX_TOKENS,
-            }
-            
-            # Add base_url if using OpenRouter or custom endpoint
-            if settings.OPENAI_API_BASE:
-                llm_kwargs["base_url"] = settings.OPENAI_API_BASE
-            
-            self.llm = ChatOpenAI(**llm_kwargs)
-            logger.info(f"Initialized Code Analyzer with OpenAI model: {self.model_name}")
-
-        elif self.provider == "anthropic":
-            api_key = api_key or settings.ANTHROPIC_API_KEY
-            if not api_key:
-                raise ValueError("Anthropic API key is required")
-
-            self.llm = ChatAnthropic(
-                model=self.model_name,
-                anthropic_api_key=api_key,
-                temperature=settings.AI_MODEL_TEMPERATURE,
-                max_tokens=settings.AI_MODEL_MAX_TOKENS,
-            )
-            logger.info(f"Initialized Code Analyzer with Anthropic model: {self.model_name}")
-
+    def __init__(self):
+        self.llm = get_ai_chat_model()
+        if self.llm:
+            logger.info("Code Analyzer initialized with AI model")
         else:
-            raise ValueError(f"Unsupported AI provider: {self.provider}")
-
-        # Create prompt template
-        self.prompt = PromptTemplate(
-            template=CODE_COMPLEXITY_PROMPT,
-            input_variables=[
-                "commit_message",
-                "files_changed",
-                "additions",
-                "deletions",
-                "diff",
-            ],
-        )
+            logger.info("Code Analyzer initialized in rule-based fallback mode")
 
     def analyze_commit(
         self,
@@ -104,86 +27,58 @@ class CodeComplexityAnalyzer:
         diff: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Analyze a git commit for complexity and quality
-
-        Args:
-            commit_message: Commit message
-            files_changed: Number of files changed
-            additions: Lines added
-            deletions: Lines deleted
-            diff: Code diff (optional but recommended)
-
-        Returns:
-            Dict with analysis results
+        Analyze a git commit for complexity and quality.
+        Falls back to rule-based analysis if AI is unavailable or fails.
         """
-        try:
-            # Truncate diff if too long (Claude has token limits)
-            if diff and len(diff) > 10000:
-                diff = diff[:10000] + "\n\n... (diff truncated)"
+        if not self.llm:
+            return self._fallback_analysis(commit_message, files_changed, additions, deletions)
 
-            # Format prompt
-            formatted_prompt = self.prompt.format(
+        try:
+            # Truncate diff to keep prompt within token limits for free models
+            if diff and len(diff) > 3000:
+                diff = diff[:3000] + "\n... (diff truncated)"
+
+            formatted_prompt = CODE_COMPLEXITY_PROMPT.format(
                 commit_message=commit_message,
                 files_changed=files_changed,
                 additions=additions,
                 deletions=deletions,
-                diff=diff or "Diff not available",
+                diff=diff or "No diff available",
             )
 
-            # Call AI model
             response = self.llm.invoke(formatted_prompt)
-            content = response.content
+            result = extract_json(response.content)
 
-            # Parse JSON response
-            # AI might wrap JSON in markdown code blocks
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
+            # Ensure all required keys with sensible defaults
+            result.setdefault("complexity_score", 5)
+            result.setdefault("quality_score", 5)
+            result.setdefault("impact", "medium")
+            result.setdefault("work_type", "feature")
+            result.setdefault("technical_debt_delta", 0)
+            result.setdefault("affected_systems", [])
+            result.setdefault("novelty_level", "moderate")
+            result.setdefault("summary", commit_message[:100])
 
-            result = json.loads(content)
+            # Clamp numeric scores
+            result["complexity_score"] = max(1, min(10, int(result["complexity_score"])))
+            result["quality_score"] = max(1, min(10, int(result["quality_score"])))
 
             logger.info(
-                f"[{self.provider}/{self.model_name}] Analyzed commit: "
-                f"complexity={result['complexity_score']}, "
+                f"AI analyzed commit: complexity={result['complexity_score']}, "
                 f"quality={result['quality_score']}, type={result['work_type']}"
             )
-
             return result
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse {self.provider} response as JSON: {e}")
-            logger.error(f"Response content: {content}")
-            # Return fallback analysis
-            return self._fallback_analysis(
-                commit_message, files_changed, additions, deletions
-            )
-
         except Exception as e:
-            logger.error(f"Error analyzing commit: {e}")
-            return self._fallback_analysis(
-                commit_message, files_changed, additions, deletions
-            )
+            logger.error(f"AI analysis failed, using fallback: {e}")
+            return self._fallback_analysis(commit_message, files_changed, additions, deletions)
 
     def _fallback_analysis(
         self, commit_message: str, files_changed: int, additions: int, deletions: int
     ) -> Dict[str, Any]:
-        """
-        Provide basic rule-based analysis when AI fails
-
-        Args:
-            commit_message: Commit message
-            files_changed: Number of files changed
-            additions: Lines added
-            deletions: Lines deleted
-
-        Returns:
-            Basic analysis dict
-        """
-        # Simple heuristics
+        """Rule-based analysis when AI is unavailable or fails"""
         total_changes = additions + deletions
 
-        # Complexity based on size
         if total_changes < 10:
             complexity = 2
         elif total_changes < 50:
@@ -195,53 +90,25 @@ class CodeComplexityAnalyzer:
         else:
             complexity = 9
 
-        # Detect work type from commit message
         message_lower = commit_message.lower()
-        if any(word in message_lower for word in ["fix", "bug", "issue"]):
+        if any(w in message_lower for w in ["fix", "bug", "issue", "patch"]):
             work_type = "bug_fix"
-        elif any(word in message_lower for word in ["refactor", "cleanup", "simplify"]):
+        elif any(w in message_lower for w in ["refactor", "cleanup", "simplify", "reorganize"]):
             work_type = "refactoring"
-        elif any(word in message_lower for word in ["test", "spec"]):
+        elif any(w in message_lower for w in ["test", "spec", "coverage"]):
             work_type = "testing"
-        elif any(word in message_lower for word in ["doc", "readme", "comment"]):
+        elif any(w in message_lower for w in ["doc", "readme", "comment", "changelog"]):
             work_type = "documentation"
         else:
             work_type = "feature"
 
         return {
             "complexity_score": complexity,
-            "quality_score": 5,  # Neutral
-            "impact_level": "medium",
+            "quality_score": 5,
+            "impact": "medium",
             "work_type": work_type,
             "technical_debt_delta": 0,
             "affected_systems": [],
-            "novelty": "moderate",
-            "explanation": "Fallback analysis (AI analysis failed)",
+            "novelty_level": "moderate",
+            "summary": f"Rule-based: {commit_message[:80]}",
         }
-
-
-# Example usage
-if __name__ == "__main__":
-    # Test the analyzer
-    analyzer = CodeComplexityAnalyzer()
-
-    result = analyzer.analyze_commit(
-        commit_message="Refactored authentication system to use JWT tokens",
-        files_changed=5,
-        additions=250,
-        deletions=180,
-        diff="""
-        --- a/auth/authentication.py
-        +++ b/auth/authentication.py
-        - def authenticate(username, password):
-        -     # Old session-based auth
-        -     session = create_session(username)
-        -     return session
-        + def authenticate(username, password):
-        +     # New JWT-based auth
-        +     token = create_jwt_token(username)
-        +     return token
-        """,
-    )
-
-    print(json.dumps(result, indent=2))

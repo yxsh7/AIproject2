@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # Application
     APP_NAME: str = "DevMetrics AI"
-    DEBUG: bool = True
+    DEBUG: bool = False
     VERSION: str = "0.1.0"
 
     # Database
@@ -22,10 +22,12 @@ class Settings(BaseSettings):
     # AI APIs
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "openrouter/hunter-alpha"
 
     # AI Model Configuration (for cost control)
-    AI_MODEL_PROVIDER: str = "openai"  # "openai" or "anthropic"
-    AI_MODEL_NAME: str = "gpt-4o-mini"  # Cost-effective model
+    AI_MODEL_PROVIDER: str = "openrouter"  # "openrouter", "openai", or "anthropic"
+    AI_MODEL_NAME: str = "openrouter/hunter-alpha"
     AI_MODEL_TEMPERATURE: float = 0.1
     AI_MODEL_MAX_TOKENS: int = 1024
     OPENAI_API_BASE: str = ""  # Optional: for OpenRouter or other OpenAI-compatible APIs

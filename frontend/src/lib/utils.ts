@@ -1,11 +1,21 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/**
- * Merge Tailwind CSS classes
- */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/**
+ * Map a score value to a colour hex string.
+ * @param v     The score value.
+ * @param max100 Set true when v is on a 0–100 scale; false (default) for 0–10.
+ */
+export function scoreCol(v: number, max100 = false): string {
+  const pct = max100 ? v : v * 10;
+  if (pct >= 80) return '#4ade80';
+  if (pct >= 60) return '#818cf8';
+  if (pct >= 40) return '#f59e0b';
+  return '#f87171';
 }
 
 /**

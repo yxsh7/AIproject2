@@ -1,6 +1,6 @@
 """Slack integration service for fetching developer activity"""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -55,7 +55,7 @@ class SlackService:
         if not SLACK_AVAILABLE:
             return 0
 
-        since_ts = (datetime.utcnow() - timedelta(days=days_back)).timestamp()
+        since_ts = (datetime.now(timezone.utc) - timedelta(days=days_back)).timestamp()
         synced = 0
 
         for channel_id in channel_ids:
@@ -148,7 +148,7 @@ class SlackService:
                 response = self.client.reactions_list(**kwargs)
                 items = response.get("items", [])
 
-                since_dt = datetime.utcnow() - timedelta(days=days_back)
+                since_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
 
                 for item in items:
                     message = item.get("message", {})
