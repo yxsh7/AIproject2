@@ -7,9 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.organization import OrganizationResponse, InviteCreate, InviteResponse
+from app.schemas.organization import (
+    OrganizationResponse,
+    InviteCreate,
+    InviteResponse,
+    ScoringWeights,
+)
 from app.models import Organization, OrganizationInvite, User
 from app.api.dependencies import require_role, get_current_org_id
+from app.services.scoring_service import ROLE_WEIGHTS
+from app.models.developer import RoleLevel
 
 router = APIRouter()
 
@@ -111,3 +118,46 @@ def revoke_invite(
     invite.is_active = False
     db.commit()
     return None
+
+
+@router.get("/scoring-weights", response_model=ScoringWeights)
+def get_scoring_weights(
+    db: Session = Depends(get_db),
+    org_id: int = Depends(get_current_org_id),
+):
+    """
+    Get the current organization's custom scoring weight profile.
+
+    Returns the org's override if one is set, otherwise the built-in
+    MID-level defaults — a sane, valid starting point for the editor
+    rather than an empty form.
+    """
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
+    weights = org.custom_scoring_weights or ROLE_WEIGHTS[RoleLevel.MID]
+    return ScoringWeights(**weights)
+
+
+@router.put("/scoring-weights", response_model=ScoringWeights)
+def update_scoring_weights(
+    data: ScoringWeights,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+    org_id: int = Depends(get_current_org_id),
+):
+    """
+    Set a custom scoring weight profile for the current organization
+    (admin only). Applies uniformly across all role levels going
+    forward — existing saved scores are not retroactively recomputed.
+    """
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
+    org.custom_scoring_weights = data.model_dump()
+    db.commit()
+    return data

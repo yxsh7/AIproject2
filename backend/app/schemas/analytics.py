@@ -152,6 +152,30 @@ class TeamAnalyticsOverview(BaseModel):
     individual_scores: List[TeamMemberScore]
 
 
+class ReviewNetworkNode(BaseModel):
+    """A team member in the review network graph"""
+
+    id: int
+    name: str
+    role_level: str
+
+
+class ReviewNetworkEdge(BaseModel):
+    """A reviewer -> PR author relationship, weighted by review count"""
+
+    from_id: int
+    to_id: int
+    count: int
+
+
+class ReviewNetworkResponse(BaseModel):
+    """Who-reviews-whom for a team, built from GitHub code reviews"""
+
+    team: str
+    nodes: List[ReviewNetworkNode]
+    edges: List[ReviewNetworkEdge]
+
+
 class ComparisonData(BaseModel):
     """Comparison data between developer and benchmark"""
 

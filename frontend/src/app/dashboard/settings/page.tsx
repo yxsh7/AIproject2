@@ -3,9 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../store/auth';
-import { developersAPI } from '../../../lib/api';
-import { DeveloperProfile } from '../../../types';
+import { developersAPI, organizationsAPI } from '../../../lib/api';
+import { DeveloperProfile, ScoringWeights } from '../../../types';
 import { Field, TextareaField, SelectField } from '../../../components/ui/form-field';
+
+const WEIGHT_DIMENSIONS: { key: keyof ScoringWeights; label: string }[] = [
+  { key: 'complexity', label: 'Complexity' },
+  { key: 'velocity', label: 'Velocity' },
+  { key: 'quality', label: 'Quality' },
+  { key: 'impact', label: 'Impact' },
+  { key: 'collaboration', label: 'Collaboration' },
+  { key: 'mentoring', label: 'Mentoring' },
+];
 
 // ─── Role level options ───────────────────────────────────────────────────────
 const ROLE_LEVELS = ['intern', 'junior', 'mid', 'senior', 'staff', 'principal'] as const;
@@ -94,18 +103,98 @@ function TeamProfileRow({
   );
 }
 
+// ─── Scoring weights editor ───────────────────────────────────────────────────
+function ScoringWeightsEditor({
+  initial,
+  onSave,
+}: {
+  initial: ScoringWeights;
+  onSave: (weights: ScoringWeights) => Promise<void>;
+}) {
+  const [weights, setWeights] = useState<ScoringWeights>(initial);
+  const [saving, setSaving] = useState(false);
+
+  const sum = WEIGHT_DIMENSIONS.reduce((total, d) => total + (Number(weights[d.key]) || 0), 0);
+  const sumOk = Math.abs(sum - 1) < 0.011;
+  const dirty = WEIGHT_DIMENSIONS.some(d => weights[d.key] !== initial[d.key]);
+
+  const setWeight = (key: keyof ScoringWeights, value: string) => {
+    setWeights(prev => ({ ...prev, [key]: value === '' ? 0 : parseFloat(value) }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(weights);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => setWeights(initial);
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+        {WEIGHT_DIMENSIONS.map(d => (
+          <div key={d.key}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>
+              {d.label}
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                className="dm-input"
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                value={weights[d.key]}
+                onChange={e => setWeight(d.key, e.target.value)}
+                style={{ fontSize: 13 }}
+              />
+              <span className="mono" style={{ fontSize: 11, color: 'var(--txt-3)', minWidth: 32 }}>
+                {Math.round(Number(weights[d.key]) * 100)}%
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <span className="mono" style={{ fontSize: 12, color: sumOk ? 'var(--green)' : 'var(--red)' }}>
+          Sum: {(sum * 100).toFixed(0)}% {sumOk ? '' : '(must equal 100%)'}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="dm-btn" onClick={handleReset} disabled={saving} style={{ fontSize: 11 }}>
+            Reset
+          </button>
+          <button
+            className={`dm-btn${dirty ? ' dm-btn-cyan' : ''}`}
+            onClick={handleSave}
+            disabled={saving || !dirty || !sumOk}
+            style={{ fontSize: 11 }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout, isInitializing } = useAuthStore();
 
-  const [activeTab,    setActiveTab]    = useState<'profile' | 'team'>('profile');
+  const [activeTab,    setActiveTab]    = useState<'profile' | 'team' | 'scoring'>('profile');
   const [toast,        setToast]        = useState<Toast>(null);
   const [myProfile,    setMyProfile]    = useState<DeveloperProfile | null>(null);
   const [allDevs,      setAllDevs]      = useState<(DeveloperProfile & { full_name?: string; email?: string })[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
   const [noProfile,    setNoProfile]    = useState(false);
+  const [scoringWeights, setScoringWeights] = useState<ScoringWeights | null>(null);
 
   // My profile form state
   const [githubUsername,  setGithubUsername]  = useState('');
@@ -115,6 +204,7 @@ export default function SettingsPage() {
   const [roleLevel,       setRoleLevel]       = useState<typeof ROLE_LEVELS[number]>('mid');
 
   const isManager = user?.role === 'manager' || user?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   const showToast = (type: 'success' | 'error', text: string) =>
     showToastFn(setToast, type, text);
@@ -125,6 +215,15 @@ export default function SettingsPage() {
     if (!user) { router.push('/login'); return; }
     fetchData();
   }, [user, isInitializing]);
+
+  // Fetched independently of the developer-profile flow above — an org admin
+  // configuring scoring weights doesn't necessarily have a developer profile.
+  useEffect(() => {
+    if (isInitializing || !user || !isAdmin) return;
+    organizationsAPI.getScoringWeights()
+      .then(res => setScoringWeights(res.data))
+      .catch(() => {});
+  }, [user, isInitializing, isAdmin]);
 
   const fetchData = async () => {
     try {
@@ -198,6 +297,17 @@ export default function SettingsPage() {
     } catch (e: any) {
       showToast('error', e.response?.data?.detail || 'Failed to update developer');
       throw e; // let the row know it failed
+    }
+  };
+
+  const handleSaveScoringWeights = async (weights: ScoringWeights) => {
+    try {
+      const res = await organizationsAPI.updateScoringWeights(weights);
+      setScoringWeights(res.data);
+      showToast('success', 'Scoring weights updated — applies to future score calculations');
+    } catch (e: any) {
+      showToast('error', e.response?.data?.detail || 'Failed to update scoring weights');
+      throw e;
     }
   };
 
@@ -284,7 +394,8 @@ export default function SettingsPage() {
           {([
             { key: 'profile', label: 'My Profile' },
             ...(isManager ? [{ key: 'team', label: 'Team Profiles' }] : []),
-          ] as { key: 'profile' | 'team'; label: string }[]).map(tab => (
+            ...(isAdmin ? [{ key: 'scoring', label: 'Scoring' }] : []),
+          ] as { key: 'profile' | 'team' | 'scoring'; label: string }[]).map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -452,6 +563,27 @@ export default function SettingsPage() {
                     onSave={handleSaveTeamRow}
                   />
                 ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Scoring ────────────────────────────────────────────────── */}
+        {activeTab === 'scoring' && isAdmin && (
+          <div className="fade-up">
+            <div className="dm-card">
+              <div style={{ marginBottom: 16 }}>
+                <span className="dm-label" style={{ marginBottom: 4 }}>Custom Scoring Weights</span>
+                <p style={{ fontSize: 12, color: 'var(--txt-3)', lineHeight: 1.5 }}>
+                  Define what &quot;impact&quot; means for your org — these six weights replace the
+                  default role-based weighting for every developer, uniformly across role levels.
+                  Changes apply to future score calculations only; past scores aren&apos;t recomputed.
+                </p>
+              </div>
+              {scoringWeights ? (
+                <ScoringWeightsEditor initial={scoringWeights} onSave={handleSaveScoringWeights} />
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--txt-3)', padding: '16px 0' }}>Loading…</p>
               )}
             </div>
           </div>

@@ -33,6 +33,8 @@ from app.models import (
     OrganizationInvite,
     DeveloperProfile,
     GitCommit,
+    PullRequest,
+    CodeReview,
     JiraTicket,
     WorkActivity,
     ProductivityScore,
@@ -211,6 +213,78 @@ def seed_git_commits(db, developer: DeveloperProfile, count: int = 8):
 
     db.commit()
     print(f"    Created {to_create} git commits for developer {developer.id}")
+
+
+def seed_pull_requests_and_reviews(db, devs, prs_per_dev: int = 4):
+    """
+    Seed pull requests plus cross-teammate code reviews so the review
+    network view (who reviews whom) has real relationships to render —
+    reviewers are always a different teammate than the PR author, never
+    the same person, so self-review edges never appear.
+    """
+    if len(devs) < 2:
+        return  # no one to cross-review with
+
+    dev_ids = [d.id for d in devs]
+    existing = (
+        db.query(PullRequest).filter(PullRequest.developer_id.in_(dev_ids)).count()
+    )
+    if existing > 0:
+        print(f"    Pull requests already exist for this team ({existing} records)")
+        return
+
+    repos = ["backend-api", "frontend-app", "data-pipeline", "infra-terraform"]
+    titles = [
+        "feat: add rate limiting to public API",
+        "fix: correct off-by-one error in pagination",
+        "refactor: split monolithic service into modules",
+        "feat: add dark mode support",
+        "fix: resolve race condition in cache invalidation",
+        "perf: reduce bundle size by lazy-loading routes",
+        "docs: document deployment runbook",
+        "test: cover edge cases in scoring service",
+    ]
+    review_states = ["approved", "changes_requested", "commented"]
+
+    pr_count = 0
+    review_count = 0
+    for dev in devs:
+        for _ in range(prs_per_dev):
+            pr = PullRequest(
+                developer_id=dev.id,
+                repo_name=random.choice(repos),
+                pr_number=random.randint(100, 9999),
+                title=random.choice(titles),
+                state=random.choice(["merged", "open", "closed"]),
+                files_changed=random.randint(1, 12),
+                additions=random.randint(10, 400),
+                deletions=random.randint(0, 150),
+                commits_count=random.randint(1, 6),
+                created_at=datetime.combine(_random_date(60, 0), datetime.min.time()),
+            )
+            db.add(pr)
+            db.flush()  # assigns pr.id without a full commit
+            pr_count += 1
+
+            reviewers = [d for d in devs if d.id != dev.id]
+            random.shuffle(reviewers)
+            for reviewer in reviewers[: random.randint(1, min(2, len(reviewers)))]:
+                db.add(
+                    CodeReview(
+                        reviewer_id=reviewer.id,
+                        pr_id=pr.id,
+                        review_state=random.choice(review_states),
+                        reviewed_at=datetime.combine(
+                            _random_date(55, 0), datetime.min.time()
+                        ),
+                    )
+                )
+                review_count += 1
+
+    db.commit()
+    print(
+        f"    Created {pr_count} pull requests and {review_count} code reviews across the team"
+    )
 
 
 def seed_jira_tickets(db, developer: DeveloperProfile, count: int = 8):
@@ -542,6 +616,8 @@ def seed_full_org_roster(db, org: Organization, accounts: list):
         seed_work_activities(db, dev, count=random.randint(15, 25))
         seed_productivity_scores(db, dev, months=3)
         seed_ai_insights(db, dev, org, count=3)
+
+    seed_pull_requests_and_reviews(db, devs)
 
     return devs
 

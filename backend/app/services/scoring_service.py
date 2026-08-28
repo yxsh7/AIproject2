@@ -3,6 +3,7 @@
 import logging
 from datetime import timedelta, date
 from typing import Dict, List, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -11,6 +12,8 @@ from app.models import (
     ProductivityScore,
     WorkType,
     RoleLevel,
+    CodeReview,
+    PullRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +99,14 @@ class ProductivityScoringService:
         collaboration_score = self._calculate_collaboration_score(activities)
         mentoring_score = self._calculate_mentoring_score(activities)
 
-        weights = ROLE_WEIGHTS.get(developer.role_level, ROLE_WEIGHTS[RoleLevel.MID])
+        org_weights = (
+            developer.organization.custom_scoring_weights
+            if developer.organization
+            else None
+        )
+        weights = org_weights or ROLE_WEIGHTS.get(
+            developer.role_level, ROLE_WEIGHTS[RoleLevel.MID]
+        )
 
         overall_score = (
             complexity_score * weights["complexity"]
@@ -508,6 +518,69 @@ class ProductivityScoringService:
             }
             for score in reversed(scores)  # Oldest to newest
         ]
+
+    def get_review_network(self, team: str, organization_id: int) -> Dict:
+        """
+        Aggregate "who reviews whom" from GitHub code reviews for a team.
+
+        Args:
+            team: Team name
+            organization_id: Organization the team belongs to (same
+                org-scoping requirement as calculate_team_scores — team
+                names aren't unique across organizations)
+
+        Returns:
+            Dict with `nodes` (team developers) and `edges` (reviewer -> PR
+            author, with a review count), self-reviews excluded.
+        """
+        developers = (
+            self.db.query(DeveloperProfile)
+            .filter(
+                DeveloperProfile.team == team,
+                DeveloperProfile.organization_id == organization_id,
+            )
+            .all()
+        )
+        if not developers:
+            return {"nodes": [], "edges": []}
+
+        dev_ids = [d.id for d in developers]
+
+        rows = (
+            self.db.query(
+                CodeReview.reviewer_id,
+                PullRequest.developer_id.label("author_id"),
+                func.count(CodeReview.id).label("count"),
+            )
+            .join(PullRequest, CodeReview.pr_id == PullRequest.id)
+            .filter(
+                CodeReview.reviewer_id.in_(dev_ids),
+                PullRequest.developer_id.in_(dev_ids),
+                CodeReview.reviewer_id
+                != PullRequest.developer_id,  # exclude self-reviews
+            )
+            .group_by(CodeReview.reviewer_id, PullRequest.developer_id)
+            .all()
+        )
+
+        edges = [
+            {"from_id": r.reviewer_id, "to_id": r.author_id, "count": r.count}
+            for r in rows
+        ]
+
+        # All team members, not just those with an edge — a developer with
+        # zero review activity is itself a meaningful signal, not noise to
+        # filter out.
+        nodes = [
+            {
+                "id": d.id,
+                "name": d.user.full_name if d.user else f"Developer #{d.id}",
+                "role_level": d.role_level,
+            }
+            for d in developers
+        ]
+
+        return {"nodes": nodes, "edges": edges}
 
     def save_score(self, score: ProductivityScore) -> ProductivityScore:
         """Save productivity score to database"""

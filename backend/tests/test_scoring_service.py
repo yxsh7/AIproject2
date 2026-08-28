@@ -8,7 +8,7 @@ Split into two sections:
 """
 
 import pytest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.models.developer import DeveloperProfile, RoleLevel
 from app.models.work_activity import WorkActivity, WorkType
@@ -246,6 +246,75 @@ class TestCalculateDeveloperScore:
         assert latest.overall_score == saved.overall_score
 
 
+class TestCustomScoringWeights:
+    """Organization.custom_scoring_weights overrides ROLE_WEIGHTS uniformly
+    across role levels when set (app/api/organizations.py's
+    GET/PUT /scoring-weights endpoints manage this column)."""
+
+    def test_no_override_uses_role_weights(
+        self, db, developer_profile, work_activities
+    ):
+        service = ProductivityScoringService(db)
+        start = date.today() - timedelta(days=15)
+        result = service.calculate_developer_score(
+            developer_profile.id, start, date.today()
+        )
+        expected = ROLE_WEIGHTS[developer_profile.role_level]
+        weighted = (
+            result.complexity_score * expected["complexity"]
+            + result.velocity_score * expected["velocity"]
+            + result.quality_score * expected["quality"]
+            + result.impact_score * expected["impact"]
+            + result.collaboration_score * expected["collaboration"]
+            + result.mentoring_score * expected["mentoring"]
+        ) * 10
+        # abs=0.05: overall_score is computed from pre-rounding dimension
+        # values, while the stored per-dimension fields used here are each
+        # independently rounded to 2dp, so an exact reconstruction drifts
+        # slightly — this just confirms the weighting, not float precision.
+        assert result.overall_score == pytest.approx(weighted, abs=0.05)
+
+    def test_override_replaces_role_weights(
+        self, db, org, developer_profile, work_activities
+    ):
+        org.custom_scoring_weights = {
+            "complexity": 0.05,
+            "velocity": 0.05,
+            "quality": 0.05,
+            "impact": 0.7,
+            "collaboration": 0.1,
+            "mentoring": 0.05,
+        }
+        db.commit()
+
+        service = ProductivityScoringService(db)
+        start = date.today() - timedelta(days=15)
+        result = service.calculate_developer_score(
+            developer_profile.id, start, date.today()
+        )
+        expected = (
+            result.complexity_score * 0.05
+            + result.velocity_score * 0.05
+            + result.quality_score * 0.05
+            + result.impact_score * 0.7
+            + result.collaboration_score * 0.1
+            + result.mentoring_score * 0.05
+        ) * 10
+        assert result.overall_score == pytest.approx(expected)
+        # Confirms the override actually changed the outcome vs. role defaults,
+        # not just that the math is internally consistent either way.
+        role_weights = ROLE_WEIGHTS[developer_profile.role_level]
+        role_weighted = (
+            result.complexity_score * role_weights["complexity"]
+            + result.velocity_score * role_weights["velocity"]
+            + result.quality_score * role_weights["quality"]
+            + result.impact_score * role_weights["impact"]
+            + result.collaboration_score * role_weights["collaboration"]
+            + result.mentoring_score * role_weights["mentoring"]
+        ) * 10
+        assert result.overall_score != pytest.approx(role_weighted)
+
+
 class TestCalculateTeamScores:
     def test_empty_team_returns_error(self, db, org):
         service = ProductivityScoringService(db)
@@ -315,3 +384,76 @@ class TestGetScoreTrends:
         trends = service.get_score_trends(developer_profile.id, periods=10)
         if len(trends) >= 2:
             assert trends[0]["period_end"] <= trends[-1]["period_end"]
+
+
+class TestGetReviewNetwork:
+    def test_empty_team_returns_empty(self, db, org):
+        service = ProductivityScoringService(db)
+        result = service.get_review_network("nonexistent-team", org.id)
+        assert result == {"nodes": [], "edges": []}
+
+    def test_all_team_members_are_nodes_even_without_reviews(
+        self, db, developer_profile, other_developer_profile
+    ):
+        service = ProductivityScoringService(db)
+        result = service.get_review_network(
+            "backend", developer_profile.organization_id
+        )
+        node_ids = {n["id"] for n in result["nodes"]}
+        assert node_ids == {developer_profile.id, other_developer_profile.id}
+        assert result["edges"] == []
+
+    def test_edge_counts_reviews_and_excludes_self_review(
+        self, db, developer_profile, other_developer_profile
+    ):
+        from app.models.git_activity import PullRequest, CodeReview
+
+        pr = PullRequest(
+            developer_id=developer_profile.id,
+            repo_name="org/repo",
+            pr_number=1,
+            title="Add feature",
+            state="merged",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(pr)
+        db.commit()
+        db.refresh(pr)
+
+        # A real cross-review (should appear as an edge) and a self-review
+        # (should be excluded).
+        db.add_all(
+            [
+                CodeReview(
+                    reviewer_id=other_developer_profile.id,
+                    pr_id=pr.id,
+                    review_state="approved",
+                    reviewed_at=datetime.now(timezone.utc),
+                ),
+                CodeReview(
+                    reviewer_id=other_developer_profile.id,
+                    pr_id=pr.id,
+                    review_state="commented",
+                    reviewed_at=datetime.now(timezone.utc),
+                ),
+                CodeReview(
+                    reviewer_id=developer_profile.id,  # reviewing their own PR
+                    pr_id=pr.id,
+                    review_state="commented",
+                    reviewed_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        db.commit()
+
+        service = ProductivityScoringService(db)
+        result = service.get_review_network(
+            "backend", developer_profile.organization_id
+        )
+        assert result["edges"] == [
+            {
+                "from_id": other_developer_profile.id,
+                "to_id": developer_profile.id,
+                "count": 2,
+            }
+        ]

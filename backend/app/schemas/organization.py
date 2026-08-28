@@ -1,8 +1,37 @@
 """Organization and invite schemas"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from datetime import datetime
+
+
+class ScoringWeights(BaseModel):
+    """
+    Custom weight profile overriding the built-in per-role-level defaults
+    (ROLE_WEIGHTS in scoring_service.py). Applies uniformly across all role
+    levels for the organization when set.
+    """
+
+    complexity: float = Field(..., ge=0, le=1)
+    velocity: float = Field(..., ge=0, le=1)
+    quality: float = Field(..., ge=0, le=1)
+    impact: float = Field(..., ge=0, le=1)
+    collaboration: float = Field(..., ge=0, le=1)
+    mentoring: float = Field(..., ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _weights_sum_to_one(self):
+        total = (
+            self.complexity
+            + self.velocity
+            + self.quality
+            + self.impact
+            + self.collaboration
+            + self.mentoring
+        )
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(f"Weights must sum to 1.0 (got {total:.3f})")
+        return self
 
 
 class OrganizationResponse(BaseModel):

@@ -292,6 +292,33 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface ReviewNetworkNode {
+  id: number;
+  name: string;
+  role_level: string;
+}
+
+export interface ReviewNetworkEdge {
+  from_id: number;
+  to_id: number;
+  count: number;
+}
+
+export interface ReviewNetwork {
+  team: string;
+  nodes: ReviewNetworkNode[];
+  edges: ReviewNetworkEdge[];
+}
+
+export interface ScoringWeights {
+  complexity: number;
+  velocity: number;
+  quality: number;
+  impact: number;
+  collaboration: number;
+  mentoring: number;
+}
+
 export type RegisterMode = 'create_org' | 'join_org';
 
 export interface RegisterData {

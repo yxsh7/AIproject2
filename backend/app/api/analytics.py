@@ -21,6 +21,7 @@ from app.schemas.analytics import (
     TrendDataPoint,
     TeamMemberScore,
     InsightResponse,
+    ReviewNetworkResponse,
 )
 from app.models import User, DeveloperProfile, WorkActivity
 from app.models.developer import RoleLevel
@@ -576,6 +577,29 @@ def get_team_overview(
         top_performers=top_performers,
         individual_scores=individual_scores,
     )
+
+
+@router.get("/teams/{team}/review-network", response_model=ReviewNetworkResponse)
+def get_team_review_network(
+    team: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
+):
+    """
+    Get the "who reviews whom" graph for a team, built from GitHub code
+    reviews. Self-reviews are excluded. Manager/admin only, same as the
+    team overview endpoint.
+    """
+    if current_user.role not in ["manager", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers and admins can view team analytics",
+        )
+
+    scoring_service = ProductivityScoringService(db)
+    network = scoring_service.get_review_network(team, org_id)
+    return ReviewNetworkResponse(team=team, **network)
 
 
 @router.post("/calculate-score", response_model=ScoreCalculationResponse)

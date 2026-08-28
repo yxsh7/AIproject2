@@ -3,6 +3,7 @@
  */
 
 import axios from 'axios';
+import { ScoringWeights } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -72,6 +73,8 @@ export const analyticsAPI = {
   // Team Analytics
   getTeamOverview: (team: string, params?: { start_date?: string; end_date?: string }) =>
     api.get(`/api/analytics/teams/${team}/overview`, { params }),
+  getReviewNetwork: (team: string) =>
+    api.get(`/api/analytics/teams/${team}/review-network`),
 
   // Score Calculation
   calculateScore: (data: {
@@ -92,6 +95,9 @@ export const organizationsAPI = {
   createInvite: (data: { role: string; max_uses?: number; expires_in_days?: number }) =>
     api.post('/api/organizations/invites', data),
   revokeInvite: (id: number) => api.delete(`/api/organizations/invites/${id}`),
+  getScoringWeights: () => api.get('/api/organizations/scoring-weights'),
+  updateScoringWeights: (data: ScoringWeights) =>
+    api.put('/api/organizations/scoring-weights', data),
 };
 
 export const adminAPI = {

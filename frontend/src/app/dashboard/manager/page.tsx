@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../store/auth';
 import { analyticsAPI, developersAPI } from '../../../lib/api';
-import { TeamAnalytics, DeveloperProductivity, DeveloperInsights, DeveloperTrends } from '../../../types';
+import { TeamAnalytics, DeveloperProductivity, DeveloperInsights, DeveloperTrends, ReviewNetwork } from '../../../types';
 import { scoreCol } from '../../../lib/utils';
 import { LineChart } from '../../../components/ui/charts';
 
@@ -52,6 +52,82 @@ function SmallDimBar({ label, value }: { label: string; value: number }) {
       <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 2, background: col, opacity: 0.8, width: `${(value / 10) * 100}%`, transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)' }} />
       </div>
+    </div>
+  );
+}
+
+// ─── Review network (who reviews whom) ────────────────────────────────────────
+function ReviewNetworkGraph({ network }: { network: ReviewNetwork }) {
+  const size = 320;
+  const center = size / 2;
+  const radius = size / 2 - 46;
+  const nodeR = 17;
+  const n = network.nodes.length;
+
+  if (n === 0) {
+    return <p style={{ fontSize: 12, color: 'var(--txt-3)', padding: '20px 0' }}>No team members.</p>;
+  }
+
+  const positions = network.nodes.map((node, i) => {
+    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+    return { ...node, x: center + radius * Math.cos(angle), y: center + radius * Math.sin(angle) };
+  });
+  const posById = Object.fromEntries(positions.map(p => [p.id, p]));
+  const maxCount = Math.max(...network.edges.map(e => e.count), 1);
+
+  const initials = (name: string) =>
+    name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <defs>
+          <marker id="review-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--cyan)" />
+          </marker>
+        </defs>
+        {network.edges.map((e, i) => {
+          const from = posById[e.from_id];
+          const to = posById[e.to_id];
+          if (!from || !to) return null;
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          // Shorten the line so the arrowhead lands on the node's edge, not its center
+          const x1 = from.x + ux * nodeR;
+          const y1 = from.y + uy * nodeR;
+          const x2 = to.x - ux * (nodeR + 6);
+          const y2 = to.y - uy * (nodeR + 6);
+          return (
+            <line
+              key={i}
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="var(--cyan)"
+              strokeOpacity={0.55}
+              strokeWidth={1 + (e.count / maxCount) * 4}
+              markerEnd="url(#review-arrow)"
+            >
+              <title>{`${from.name} reviewed ${to.name}'s PRs ${e.count}×`}</title>
+            </line>
+          );
+        })}
+        {positions.map(p => (
+          <g key={p.id}>
+            <circle cx={p.x} cy={p.y} r={nodeR} fill="var(--surf-2)" stroke="var(--border-1)" strokeWidth={1.5} />
+            <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize={10} fontFamily="var(--font-mono)" fill="var(--txt-1)">
+              {initials(p.name)}
+            </text>
+            <title>{`${p.name} (${p.role_level})`}</title>
+          </g>
+        ))}
+      </svg>
+      {network.edges.length === 0 && (
+        <p style={{ fontSize: 11, color: 'var(--txt-3)', marginTop: 8 }}>
+          No cross-review activity yet for this team.
+        </p>
+      )}
     </div>
   );
 }
@@ -281,6 +357,7 @@ export default function ManagerDashboardPage() {
 
   const [developers,   setDevelopers]   = useState<DeveloperWithUser[]>([]);
   const [teamData,     setTeamData]     = useState<TeamAnalytics | null>(null);
+  const [reviewNetwork, setReviewNetwork] = useState<ReviewNetwork | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
   const [teams,        setTeams]        = useState<string[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -322,10 +399,15 @@ export default function ManagerDashboardPage() {
     if (!team) return;
     try {
       setTeamLoading(true);
-      const res = await analyticsAPI.getTeamOverview(team);
-      setTeamData(res.data);
+      const [overviewRes, networkRes] = await Promise.allSettled([
+        analyticsAPI.getTeamOverview(team),
+        analyticsAPI.getReviewNetwork(team),
+      ]);
+      setTeamData(overviewRes.status === 'fulfilled' ? overviewRes.value.data : null);
+      setReviewNetwork(networkRes.status === 'fulfilled' ? networkRes.value.data : null);
     } catch {
       setTeamData(null);
+      setReviewNetwork(null);
     } finally {
       setTeamLoading(false);
     }
@@ -588,6 +670,22 @@ export default function ManagerDashboardPage() {
                 </table>
               </div>
             </div>
+
+            {/* Review network */}
+            {reviewNetwork && (
+              <div className="dm-card" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span className="dm-label" style={{ marginBottom: 0 }}>Review Network</span>
+                  <span style={{ fontSize: 10, color: 'var(--txt-3)', fontFamily: 'var(--font-mono)' }}>who reviews whom</span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--txt-3)', marginBottom: 12 }}>
+                  Arrows point from reviewer to PR author — thicker lines mean more reviews. Self-reviews excluded.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ReviewNetworkGraph network={reviewNetwork} />
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="dm-card" style={{ padding: '40px', textAlign: 'center', marginBottom: 12 }}>
