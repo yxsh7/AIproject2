@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../store/auth';
 import { analyticsAPI, developersAPI } from '../../../lib/api';
-import { TeamAnalytics, DeveloperProductivity, DeveloperInsights } from '../../../types';
+import { TeamAnalytics, DeveloperProductivity, DeveloperInsights, DeveloperTrends } from '../../../types';
 import { scoreCol } from '../../../lib/utils';
+import { LineChart } from '../../../components/ui/charts';
 
 interface DeveloperWithUser {
   id: number;
@@ -21,6 +22,7 @@ interface DeveloperWithUser {
 interface DevPanel {
   productivity: DeveloperProductivity | null;
   insights: DeveloperInsights | null;
+  trends: DeveloperTrends | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ function DevDetailPanel({
 }) {
   const prod = panel?.productivity;
   const ins  = panel?.insights;
+  const trd  = panel?.trends;
 
   return (
     <>
@@ -196,6 +199,28 @@ function DevDetailPanel({
               Period: {prod.period_start} → {prod.period_end}
             </div>
 
+            {/* Trends */}
+            {trd && trd.trends.length >= 2 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: 'var(--txt-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' }}>
+                    Score Over Time
+                  </div>
+                  <span className="mono" style={{
+                    fontSize: 10,
+                    color: trd.trend_analysis.change > 0 ? '#4ade80' : trd.trend_analysis.change < 0 ? '#f87171' : 'var(--txt-3)',
+                  }}>
+                    {trd.trend_analysis.change > 0 ? '↑' : trd.trend_analysis.change < 0 ? '↓' : '→'} {Math.abs(trd.trend_analysis.change).toFixed(1)}
+                  </span>
+                </div>
+                <LineChart
+                  data={trd.trends.map(t => ({ label: t.period_end, value: t.overall_score }))}
+                  height={100}
+                  color="#7a9cc6"
+                />
+              </div>
+            )}
+
             {/* Insights */}
             {ins && ins.insights.length > 0 && (
               <>
@@ -315,13 +340,15 @@ export default function ManagerDashboardPage() {
     setSelectedDev(dev);
     setDevPanel(null);
     setPanelLoading(true);
-    const [prRes, inRes] = await Promise.allSettled([
+    const [prRes, inRes, trRes] = await Promise.allSettled([
       analyticsAPI.getProductivity(dev.id),
       analyticsAPI.getInsights(dev.id),
+      analyticsAPI.getTrends(dev.id),
     ]);
     setDevPanel({
       productivity: prRes.status === 'fulfilled' ? prRes.value.data : null,
       insights:     inRes.status === 'fulfilled' ? inRes.value.data : null,
+      trends:       trRes.status === 'fulfilled' ? trRes.value.data : null,
     });
     setPanelLoading(false);
   };

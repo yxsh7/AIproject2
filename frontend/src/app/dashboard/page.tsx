@@ -9,13 +9,14 @@ import {
   DeveloperAnalyticsOverview,
   DeveloperProductivity,
   DeveloperInsights,
+  DeveloperTrends,
 } from '../../types';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useToast } from '../../components/ui/toast';
 import { Onboarding } from '../../components/onboarding';
 import { DashboardSkeleton, IntegrationsSkeleton, ProfileSkeleton } from '../../components/ui/skeleton';
-import { BarChart, DonutChart, ProgressRing } from '../../components/ui/charts';
+import { BarChart, DonutChart, ProgressRing, LineChart } from '../../components/ui/charts';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DeveloperAnalyticsOverview | null>(null);
   const [productivity, setProductivity] = useState<DeveloperProductivity | null>(null);
   const [insights, setInsights] = useState<DeveloperInsights | null>(null);
+  const [trends, setTrends] = useState<DeveloperTrends | null>(null);
   const [loading, setLoading] = useState(true);
   const [developerId, setDeveloperId] = useState<number | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
@@ -117,15 +119,17 @@ export default function DashboardPage() {
     if (!developerId) return;
 
     try {
-      const [overviewRes, productivityRes, insightsRes] = await Promise.all([
+      const [overviewRes, productivityRes, insightsRes, trendsRes] = await Promise.all([
         analyticsAPI.getOverview(developerId),
         analyticsAPI.getProductivity(developerId, { include_comparison: true }),
         analyticsAPI.getInsights(developerId),
+        analyticsAPI.getTrends(developerId),
       ]);
 
       setOverview(overviewRes.data);
       setProductivity(productivityRes.data);
       setInsights(insightsRes.data);
+      setTrends(trendsRes.data);
       setLastRefresh(new Date());
     } catch (e) {
       console.log('Failed to refresh analytics');
@@ -150,15 +154,17 @@ export default function DashboardPage() {
 
         // Fetch analytics
         try {
-          const [overviewRes, productivityRes, insightsRes] = await Promise.all([
+          const [overviewRes, productivityRes, insightsRes, trendsRes] = await Promise.all([
             analyticsAPI.getOverview(myProfile.id),
             analyticsAPI.getProductivity(myProfile.id, { include_comparison: true }),
             analyticsAPI.getInsights(myProfile.id),
+            analyticsAPI.getTrends(myProfile.id),
           ]);
 
           setOverview(overviewRes.data);
           setProductivity(productivityRes.data);
           setInsights(insightsRes.data);
+          setTrends(trendsRes.data);
         } catch (e) {
           console.log('Analytics not available yet');
         }
@@ -857,6 +863,34 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Trends */}
+                {trends && trends.trends.length >= 2 && (
+                  <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-white">Score Over Time</h3>
+                      {trends.trend_analysis && 'change' in trends.trend_analysis && (
+                        <span
+                          className={`text-sm font-medium ${
+                            trends.trend_analysis.change > 0
+                              ? 'text-emerald-400'
+                              : trends.trend_analysis.change < 0
+                              ? 'text-red-400'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {trends.trend_analysis.change > 0 ? '↑' : trends.trend_analysis.change < 0 ? '↓' : '→'}{' '}
+                          {Math.abs(trends.trend_analysis.change).toFixed(1)} pts vs. previous period
+                        </span>
+                      )}
+                    </div>
+                    <LineChart
+                      data={trends.trends.map(t => ({ label: t.period_end, value: t.overall_score }))}
+                      height={140}
+                      color="#3b82f6"
+                    />
+                  </div>
+                )}
 
                 {/* Work Distribution */}
                 {overview?.work_breakdown && Object.keys(overview.work_breakdown).length > 0 && (

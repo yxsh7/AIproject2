@@ -224,6 +224,67 @@ export function TrendLine({
   );
 }
 
+interface LineChartProps {
+  data: { label: string; value: number }[];
+  width?: number;
+  height?: number;
+  color?: string;
+  className?: string;
+}
+
+export function LineChart({
+  data,
+  width = 480,
+  height = 140,
+  color = '#3b82f6',
+  className = '',
+}: LineChartProps) {
+  if (data.length < 2) {
+    return (
+      <div className={`flex items-center justify-center text-xs text-slate-500 ${className}`} style={{ height }}>
+        Not enough history yet — check back after another period is scored.
+      </div>
+    );
+  }
+
+  const padTop = 12;
+  const padBottom = 24;
+  const plotHeight = height - padTop - padBottom;
+  const max = Math.max(...data.map(d => d.value));
+  const min = Math.min(...data.map(d => d.value));
+  const range = max - min || 1;
+
+  const points = data.map((d, idx) => {
+    const x = (idx / (data.length - 1)) * width;
+    const y = padTop + plotHeight - ((d.value - min) / range) * plotHeight;
+    return { x, y, ...d };
+  });
+
+  const linePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+  const areaPoints = `0,${height - padBottom} ${linePoints} ${width},${height - padBottom}`;
+
+  return (
+    <div className={className}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">
+        <polygon points={areaPoints} fill={color} opacity={0.08} />
+        <polyline points={linePoints} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((p, idx) => (
+          <circle key={idx} cx={p.x} cy={p.y} r={3} fill={color}>
+            <title>{`${p.label}: ${p.value.toFixed(1)}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between mt-1">
+        {points.map((p, idx) => (
+          <span key={idx} className="text-[10px] text-slate-500">
+            {idx === 0 || idx === points.length - 1 || points.length <= 6 ? p.label : ''}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface ProgressRingProps {
   value: number;
   max?: number;
