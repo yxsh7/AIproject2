@@ -105,7 +105,9 @@ class SlackService:
                         reactions = msg.get("reactions", [])
                         reaction_count = sum(r.get("count", 0) for r in reactions)
 
-                        msg_dt = datetime.fromtimestamp(float(message_ts))
+                        msg_dt = datetime.fromtimestamp(
+                            float(message_ts), tz=timezone.utc
+                        )
 
                         slack_msg = SlackMessage(
                             developer_id=developer_id,
@@ -171,7 +173,9 @@ class SlackService:
                         if not msg_ts:
                             continue
 
-                        reaction_dt = datetime.fromtimestamp(float(msg_ts))
+                        reaction_dt = datetime.fromtimestamp(
+                            float(msg_ts), tz=timezone.utc
+                        )
                         # NOTE: Slack API returns message timestamp, not reaction timestamp.
                         # Reactions on old messages may be filtered out even if recently given.
                         if reaction_dt < since_dt:
