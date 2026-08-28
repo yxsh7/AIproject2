@@ -1,4 +1,5 @@
 """Developer management API endpoints"""
+
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -11,7 +12,11 @@ from app.schemas.developer import (
     DeveloperWithUser,
 )
 from app.models import DeveloperProfile, User
-from app.api.dependencies import get_current_active_user, require_manager_or_admin, get_current_org_id
+from app.api.dependencies import (
+    get_current_active_user,
+    require_manager_or_admin,
+    get_current_org_id,
+)
 
 router = APIRouter()
 
@@ -81,7 +86,9 @@ def list_developers(
     team: Optional[str] = Query(None, description="Filter by team"),
     role_level: Optional[str] = Query(None, description="Filter by role level"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Max number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Max number of records to return"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     org_id: int = Depends(get_current_org_id),
@@ -101,7 +108,11 @@ def list_developers(
         List of developer profiles with user info
     """
     # Build query, scoped to the caller's organization
-    query = db.query(DeveloperProfile).join(User).filter(DeveloperProfile.organization_id == org_id)
+    query = (
+        db.query(DeveloperProfile)
+        .join(User)
+        .filter(DeveloperProfile.organization_id == org_id)
+    )
 
     # Apply filters
     if team:

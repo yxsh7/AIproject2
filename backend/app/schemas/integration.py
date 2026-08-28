@@ -1,4 +1,5 @@
 """Integration schemas"""
+
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -8,7 +9,9 @@ class GitHubIntegrationCreate(BaseModel):
     """Schema for creating GitHub integration"""
 
     organization_name: str = Field(..., description="GitHub organization name")
-    access_token: str = Field(..., description="GitHub personal access token or OAuth token")
+    access_token: str = Field(
+        ..., description="GitHub personal access token or OAuth token"
+    )
     repos: Optional[list[str]] = Field(
         default=None,
         description=(
@@ -23,17 +26,23 @@ class GitHubIntegrationCreate(BaseModel):
 class JiraIntegrationCreate(BaseModel):
     """Schema for creating Jira integration"""
 
-    workspace_url: HttpUrl = Field(..., description="Jira workspace URL (e.g., https://yourcompany.atlassian.net)")
+    workspace_url: HttpUrl = Field(
+        ..., description="Jira workspace URL (e.g., https://yourcompany.atlassian.net)"
+    )
     username: str = Field(..., description="Jira username/email")
     api_token: str = Field(..., description="Jira API token")
-    project_keys: Optional[list[str]] = Field(default=None, description="List of Jira project keys to sync")
+    project_keys: Optional[list[str]] = Field(
+        default=None, description="List of Jira project keys to sync"
+    )
 
 
 class SlackIntegrationCreate(BaseModel):
     """Schema for creating Slack integration"""
 
     bot_token: str = Field(..., description="Slack bot token (xoxb-...)")
-    channel_ids: list[str] = Field(..., description="List of Slack channel IDs to monitor")
+    channel_ids: list[str] = Field(
+        ..., description="List of Slack channel IDs to monitor"
+    )
 
 
 class IntegrationResponse(BaseModel):
@@ -53,7 +62,9 @@ class IntegrationResponse(BaseModel):
 class IntegrationSyncRequest(BaseModel):
     """Schema for triggering integration sync"""
 
-    days_back: int = Field(default=30, ge=1, le=365, description="Number of days to sync back")
+    days_back: int = Field(
+        default=30, ge=1, le=365, description="Number of days to sync back"
+    )
 
 
 class IntegrationSyncResponse(BaseModel):

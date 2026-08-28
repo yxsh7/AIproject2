@@ -1,4 +1,5 @@
 """Work Type Classifier Agent"""
+
 import logging
 from typing import Dict, Any, Optional, List
 
@@ -18,7 +19,9 @@ class WorkTypeClassifier:
         if self.llm:
             logger.info("Work Classifier initialized with AI model")
         else:
-            logger.warning("Work Classifier has no AI provider configured — classification will fail")
+            logger.warning(
+                "Work Classifier has no AI provider configured — classification will fail"
+            )
 
     def classify_ticket(
         self,

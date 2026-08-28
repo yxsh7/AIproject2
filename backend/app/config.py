@@ -1,4 +1,5 @@
 """Application configuration"""
+
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 from typing import List
@@ -31,7 +32,9 @@ class Settings(BaseSettings):
     AI_MODEL_NAME: str = "openrouter/hunter-alpha"
     AI_MODEL_TEMPERATURE: float = 0.1
     AI_MODEL_MAX_TOKENS: int = 1024
-    OPENAI_API_BASE: str = ""  # Optional: for OpenRouter or other OpenAI-compatible APIs
+    OPENAI_API_BASE: str = (
+        ""  # Optional: for OpenRouter or other OpenAI-compatible APIs
+    )
 
     # GitHub Integration
     GITHUB_APP_ID: str = ""

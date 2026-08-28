@@ -1,4 +1,5 @@
 """Integration management API endpoints"""
+
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -53,7 +54,9 @@ def _upsert_integration(
     return existing
 
 
-@router.post("/github", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/github", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED
+)
 def create_github_integration(
     integration_data: GitHubIntegrationCreate,
     db: Session = Depends(get_db),
@@ -97,14 +100,21 @@ def create_github_integration(
             detail=f"GitHub connection error: {str(e)}",
         )
 
-    return _upsert_integration(db, organization_id, IntegrationType.GITHUB, {
-        "organization_name": integration_data.organization_name,
-        "access_token": encrypt_secret(integration_data.access_token),
-        "repos": integration_data.repos,
-    })
+    return _upsert_integration(
+        db,
+        organization_id,
+        IntegrationType.GITHUB,
+        {
+            "organization_name": integration_data.organization_name,
+            "access_token": encrypt_secret(integration_data.access_token),
+            "repos": integration_data.repos,
+        },
+    )
 
 
-@router.post("/jira", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/jira", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED
+)
 def create_jira_integration(
     integration_data: JiraIntegrationCreate,
     db: Session = Depends(get_db),
@@ -152,15 +162,22 @@ def create_jira_integration(
             detail=f"Jira connection error: {str(e)}",
         )
 
-    return _upsert_integration(db, organization_id, IntegrationType.JIRA, {
-        "url": str(integration_data.workspace_url),
-        "username": integration_data.username,
-        "api_token": encrypt_secret(integration_data.api_token),
-        "project_keys": integration_data.project_keys or [],
-    })
+    return _upsert_integration(
+        db,
+        organization_id,
+        IntegrationType.JIRA,
+        {
+            "url": str(integration_data.workspace_url),
+            "username": integration_data.username,
+            "api_token": encrypt_secret(integration_data.api_token),
+            "project_keys": integration_data.project_keys or [],
+        },
+    )
 
 
-@router.post("/slack", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/slack", response_model=IntegrationResponse, status_code=status.HTTP_201_CREATED
+)
 def create_slack_integration(
     integration_data: SlackIntegrationCreate,
     db: Session = Depends(get_db),
@@ -169,21 +186,35 @@ def create_slack_integration(
 ):
     """Configure Slack integration (Admin only)"""
     if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can configure integrations")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can configure integrations",
+        )
 
     organization_id = org_id
 
     try:
         slack_service = SlackService(bot_token=integration_data.bot_token)
         if not slack_service.test_connection():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to connect to Slack. Please check your bot token.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to connect to Slack. Please check your bot token.",
+            )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Slack connection error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Slack connection error: {str(e)}",
+        )
 
-    return _upsert_integration(db, organization_id, IntegrationType.SLACK, {
-        "bot_token": encrypt_secret(integration_data.bot_token),
-        "channel_ids": integration_data.channel_ids,
-    })
+    return _upsert_integration(
+        db,
+        organization_id,
+        IntegrationType.SLACK,
+        {
+            "bot_token": encrypt_secret(integration_data.bot_token),
+            "channel_ids": integration_data.channel_ids,
+        },
+    )
 
 
 @router.get("/", response_model=List[IntegrationResponse])
@@ -250,7 +281,10 @@ async def trigger_sync(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
+        .filter(
+            IntegrationConfig.id == integration_id,
+            IntegrationConfig.organization_id == org_id,
+        )
         .first()
     )
 
@@ -299,7 +333,10 @@ def get_sync_status(
     """
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
+        .filter(
+            IntegrationConfig.id == integration_id,
+            IntegrationConfig.organization_id == org_id,
+        )
         .first()
     )
 
@@ -348,7 +385,10 @@ def test_integration(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
+        .filter(
+            IntegrationConfig.id == integration_id,
+            IntegrationConfig.organization_id == org_id,
+        )
         .first()
     )
 
@@ -361,17 +401,25 @@ def test_integration(
         if integration.type == IntegrationType.GITHUB:
             service = GitHubService.from_integration_config(integration)
             success = service.test_connection()
-            message = "GitHub connection successful" if success else "GitHub connection failed"
+            message = (
+                "GitHub connection successful"
+                if success
+                else "GitHub connection failed"
+            )
 
         elif integration.type == IntegrationType.JIRA:
             service = JiraService.from_integration_config(integration)
             success = service.test_connection()
-            message = "Jira connection successful" if success else "Jira connection failed"
+            message = (
+                "Jira connection successful" if success else "Jira connection failed"
+            )
 
         elif integration.type == IntegrationType.SLACK:
             service = SlackService.from_integration_config(integration)
             success = service.test_connection()
-            message = "Slack connection successful" if success else "Slack connection failed"
+            message = (
+                "Slack connection successful" if success else "Slack connection failed"
+            )
 
         else:
             raise HTTPException(
@@ -414,7 +462,10 @@ def delete_integration(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
+        .filter(
+            IntegrationConfig.id == integration_id,
+            IntegrationConfig.organization_id == org_id,
+        )
         .first()
     )
 

@@ -1,5 +1,14 @@
 """Integration configuration model"""
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, Text
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    DateTime,
+    ForeignKey,
+    Enum as SQLEnum,
+    JSON,
+    Text,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -35,8 +44,16 @@ class IntegrationConfig(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
     # Integration details
-    type = Column(SQLEnum(IntegrationType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
-    status = Column(SQLEnum(IntegrationStatus, values_callable=lambda x: [e.value for e in x]), default=IntegrationStatus.INACTIVE, nullable=False)
+    type = Column(
+        SQLEnum(IntegrationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
+    status = Column(
+        SQLEnum(IntegrationStatus, values_callable=lambda x: [e.value for e in x]),
+        default=IntegrationStatus.INACTIVE,
+        nullable=False,
+    )
 
     # Configuration (encrypted JSON containing API tokens, etc.)
     config = Column(JSON, nullable=False)

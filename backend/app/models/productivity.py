@@ -1,5 +1,17 @@
 """Productivity scoring and AI insights models"""
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Text, JSON, Date, Enum as SQLEnum
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Text,
+    JSON,
+    Date,
+    Enum as SQLEnum,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -15,8 +27,12 @@ class ProductivityScore(Base):
     __tablename__ = "productivity_scores"
 
     id = Column(Integer, primary_key=True, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
 
     # Time period
     period_start = Column(Date, nullable=False, index=True)
@@ -102,13 +118,26 @@ class AIInsight(Base):
     __tablename__ = "ai_insights"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=True, index=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=True, index=True
+    )
     # If developer_id is NULL, it's a team/organization-level insight
 
     # Insight details
-    insight_type = Column(SQLEnum(InsightType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
-    priority = Column(SQLEnum(InsightPriority, values_callable=lambda x: [e.value for e in x]), default=InsightPriority.MEDIUM, nullable=False, index=True)
+    insight_type = Column(
+        SQLEnum(InsightType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
+    priority = Column(
+        SQLEnum(InsightPriority, values_callable=lambda x: [e.value for e in x]),
+        default=InsightPriority.MEDIUM,
+        nullable=False,
+        index=True,
+    )
 
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)

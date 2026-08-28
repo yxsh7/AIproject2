@@ -3,26 +3,30 @@
 Uses an in-memory SQLite database so tests run without a live Postgres instance.
 Each test gets a fresh database via function-scoped fixtures.
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import pytest
-from datetime import date, timedelta
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
+import sys
+import os
 
-from app.database import Base, get_db
-from app.main import app
-from app.models.organization import Organization
-from app.models.user import User, UserRole
-from app.models.developer import DeveloperProfile, RoleLevel
-from app.models.work_activity import WorkActivity, WorkType
-from app.utils.security import get_password_hash, create_access_token
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import pytest  # noqa: E402
+from datetime import date, timedelta  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.organization import Organization  # noqa: E402
+from app.models.user import User, UserRole  # noqa: E402
+from app.models.developer import DeveloperProfile, RoleLevel  # noqa: E402
+from app.models.work_activity import WorkActivity, WorkType  # noqa: E402
+from app.utils.security import get_password_hash, create_access_token  # noqa: E402
 
 
 # ─── Database ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="function")
 def engine():
@@ -67,6 +71,7 @@ def client(db):
 
 
 # ─── Seed helpers ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def org(db):
@@ -236,6 +241,7 @@ def work_activities(db, developer_profile):
 
 
 # ─── Auth helper ──────────────────────────────────────────────────────────────
+
 
 def auth_header(user: User) -> dict:
     token = create_access_token(

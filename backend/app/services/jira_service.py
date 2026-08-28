@@ -1,4 +1,5 @@
 """Jira integration service for fetching developer activity"""
+
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
 from atlassian import Jira
@@ -164,11 +165,15 @@ class JiraService:
                         if fields.get("priority")
                         else None
                     )
-                    story_points = fields.get("customfield_10016")  # Common field for story points
+                    story_points = fields.get(
+                        "customfield_10016"
+                    )  # Common field for story points
                     sprint = None
 
                     # Try to get sprint info
-                    sprint_field = fields.get("customfield_10020")  # Common sprint field
+                    sprint_field = fields.get(
+                        "customfield_10020"
+                    )  # Common sprint field
                     if sprint_field and isinstance(sprint_field, list) and sprint_field:
                         # Sprint is usually in format: "com.atlassian.greenhopper.service.sprint.Sprint@..."
                         # We'll just get the sprint name if available
@@ -288,9 +293,7 @@ class JiraService:
             return comments_synced
 
         except Exception as e:
-            logger.error(
-                f"Error syncing comments for ticket {ticket.ticket_key}: {e}"
-            )
+            logger.error(f"Error syncing comments for ticket {ticket.ticket_key}: {e}")
             db.rollback()
             return 0
 
@@ -349,9 +352,7 @@ class JiraService:
         Returns:
             Dict with counts of synced items
         """
-        logger.info(
-            f"Starting full Jira sync for developer {developer.jira_username}"
-        )
+        logger.info(f"Starting full Jira sync for developer {developer.jira_username}")
 
         tickets_count = self.sync_tickets_for_developer(
             db, developer, project_keys, days_back

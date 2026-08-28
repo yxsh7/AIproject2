@@ -1,4 +1,5 @@
 """Organization model"""
+
 from sqlalchemy import Boolean, Column, Integer, String, DateTime, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

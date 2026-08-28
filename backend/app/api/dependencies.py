@@ -1,5 +1,5 @@
 """API dependencies for authentication and authorization"""
-from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -14,7 +14,8 @@ security = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token
@@ -63,7 +64,10 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     """
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    if current_user.organization is not None and not current_user.organization.is_active:
+    if (
+        current_user.organization is not None
+        and not current_user.organization.is_active
+    ):
         raise HTTPException(status_code=403, detail="Organization has been suspended")
     return current_user
 
@@ -83,7 +87,9 @@ def get_current_org_id(current_user: User = Depends(get_current_active_user)) ->
         once organization_id is NOT NULL, but guards against orphaned rows)
     """
     if current_user.organization_id is None:
-        raise HTTPException(status_code=403, detail="User is not assigned to an organization")
+        raise HTTPException(
+            status_code=403, detail="User is not assigned to an organization"
+        )
     return current_user.organization_id
 
 
@@ -127,7 +133,9 @@ def require_role(required_role: str):
     return role_checker
 
 
-def require_manager_or_admin(current_user: User = Depends(get_current_active_user)) -> User:
+def require_manager_or_admin(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
     """
     Dependency to require manager or admin role
 

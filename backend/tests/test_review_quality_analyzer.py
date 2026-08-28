@@ -6,14 +6,17 @@ raise AIAnalysisError rather than substitute heuristic scores. These tests
 inject a fake LLM directly (bypassing get_ai_chat_model()/real network calls)
 so retry/failure behavior can be tested deterministically and offline.
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import pytest
-from types import SimpleNamespace
+import sys
+import os
 
-from app.ai.agents.review_quality_analyzer import ReviewQualityAnalyzer
-from app.ai.base import AIAnalysisError
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import pytest  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from app.ai.agents.review_quality_analyzer import ReviewQualityAnalyzer  # noqa: E402
+from app.ai.base import AIAnalysisError  # noqa: E402
 
 
 class _FakeModel:
@@ -49,8 +52,10 @@ def test_empty_comments_returns_zero_without_calling_ai():
     even need a model configured."""
     analyzer = _analyzer_with_model(None)
     result = analyzer.analyze_review(
-        reviewer_username="alice", pr_title="Fix login bug",
-        review_state="commented", comments=[],
+        reviewer_username="alice",
+        pr_title="Fix login bug",
+        review_state="commented",
+        comments=[],
     )
     assert result["quality_score"] == 0
     assert result["mentoring_detected"] is False
@@ -61,8 +66,10 @@ def test_no_ai_configured_raises():
     analyzer = _analyzer_with_model(None)
     with pytest.raises(AIAnalysisError):
         analyzer.analyze_review(
-            reviewer_username="alice", pr_title="Add feature",
-            review_state="approved", comments=["LGTM"],
+            reviewer_username="alice",
+            pr_title="Add feature",
+            review_state="approved",
+            comments=["LGTM"],
         )
 
 
@@ -70,8 +77,10 @@ def test_successful_analysis_returns_expected_shape():
     model = _FakeModel([VALID_RESPONSE])
     analyzer = _analyzer_with_model(model)
     result = analyzer.analyze_review(
-        reviewer_username="alice", pr_title="Optimize search",
-        review_state="changes_requested", comments=["Have you considered a hash map?"],
+        reviewer_username="alice",
+        pr_title="Optimize search",
+        review_state="changes_requested",
+        comments=["Have you considered a hash map?"],
     )
     assert result["quality_score"] == 7.0
     assert result["mentoring_detected"] is True
@@ -85,8 +94,10 @@ def test_retries_on_transient_failure_then_succeeds(monkeypatch):
     model = _FakeModel([ValueError("truncated JSON"), VALID_RESPONSE])
     analyzer = _analyzer_with_model(model)
     result = analyzer.analyze_review(
-        reviewer_username="alice", pr_title="Refactor",
-        review_state="commented", comments=["Why is this needed?"],
+        reviewer_username="alice",
+        pr_title="Refactor",
+        review_state="commented",
+        comments=["Why is this needed?"],
     )
     assert result["quality_score"] == 7.0
     assert model.calls == 2
@@ -98,7 +109,9 @@ def test_gives_up_after_max_retries_raises(monkeypatch):
     analyzer = _analyzer_with_model(model)
     with pytest.raises(AIAnalysisError):
         analyzer.analyze_review(
-            reviewer_username="alice", pr_title="PR",
-            review_state="commented", comments=["Consider this approach"],
+            reviewer_username="alice",
+            pr_title="PR",
+            review_state="commented",
+            comments=["Consider this approach"],
         )
     assert model.calls == 3  # default retries=3, never exceeds that

@@ -1,4 +1,5 @@
 """Developer profile schemas"""
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -8,13 +9,17 @@ class DeveloperProfileCreate(BaseModel):
     """Schema for creating a developer profile"""
 
     user_id: int
-    role_level: str = Field(..., description="Role level: intern, junior, mid, senior, staff, principal")
+    role_level: str = Field(
+        ..., description="Role level: intern, junior, mid, senior, staff, principal"
+    )
     team: Optional[str] = None
     job_title: Optional[str] = None
     github_username: Optional[str] = None
     jira_username: Optional[str] = None
     slack_user_id: Optional[str] = None
-    focus_areas: Optional[List[str]] = Field(default=None, description="List of focus areas")
+    focus_areas: Optional[List[str]] = Field(
+        default=None, description="List of focus areas"
+    )
     bio: Optional[str] = None
 
 

@@ -1,9 +1,17 @@
 """Background tasks for AI analysis of code and work activities"""
+
 import logging
 
 from app.tasks.celery_app import celery_app
 from app.database import SessionLocal
-from app.models import GitCommit, JiraTicket, WorkActivity, WorkType, DeveloperProfile, CodeReview
+from app.models import (
+    GitCommit,
+    JiraTicket,
+    WorkActivity,
+    WorkType,
+    DeveloperProfile,
+    CodeReview,
+)
 from app.models.slack_activity import SlackMessage
 from app.ai.agents.code_analyzer import CodeComplexityAnalyzer
 from app.ai.agents.work_classifier import WorkTypeClassifier
@@ -84,7 +92,9 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
             logger.info(f"No unanalyzed commits found for developer {developer_id}")
             return {"analyzed_count": 0}
 
-        logger.info(f"Analyzing {len(commits)} commits for developer {developer.github_username}")
+        logger.info(
+            f"Analyzing {len(commits)} commits for developer {developer.github_username}"
+        )
 
         # Initialize AI analyzer
         analyzer = CodeComplexityAnalyzer()
@@ -96,11 +106,15 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
         for commit in commits:
             try:
                 # Dedup: skip if WorkActivity already exists for this source
-                existing = db.query(WorkActivity).filter_by(
-                    developer_id=developer_id,
-                    source_type="git",
-                    source_id=str(commit.id),
-                ).first()
+                existing = (
+                    db.query(WorkActivity)
+                    .filter_by(
+                        developer_id=developer_id,
+                        source_type="git",
+                        source_id=str(commit.id),
+                    )
+                    .first()
+                )
                 if existing:
                     commit.analyzed = 1
                     continue
@@ -122,7 +136,9 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
                 # Create work activity
                 # support both old "impact_level" and new "impact" key names
-                impact_str = analysis.get("impact", analysis.get("impact_level", "medium"))
+                impact_str = analysis.get(
+                    "impact", analysis.get("impact_level", "medium")
+                )
                 work_activity = WorkActivity(
                     developer_id=developer_id,
                     organization_id=developer.organization_id,
@@ -163,7 +179,9 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
             except Exception as e:
                 failed_count += 1
-                logger.error(f"Failed to analyze commit {commit.id} (sha={commit.commit_sha}): {e}")
+                logger.error(
+                    f"Failed to analyze commit {commit.id} (sha={commit.commit_sha}): {e}"
+                )
                 continue
 
         # Final commit
@@ -230,7 +248,9 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
             logger.info(f"No unanalyzed tickets found for developer {developer_id}")
             return {"analyzed_count": 0}
 
-        logger.info(f"Analyzing {len(tickets)} tickets for developer {developer.jira_username}")
+        logger.info(
+            f"Analyzing {len(tickets)} tickets for developer {developer.jira_username}"
+        )
 
         # Initialize AI classifier
         classifier = WorkTypeClassifier()
@@ -242,11 +262,15 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
         for ticket in tickets:
             try:
                 # Dedup: skip if WorkActivity already exists for this source
-                existing = db.query(WorkActivity).filter_by(
-                    developer_id=developer_id,
-                    source_type="jira",
-                    source_id=str(ticket.id),
-                ).first()
+                existing = (
+                    db.query(WorkActivity)
+                    .filter_by(
+                        developer_id=developer_id,
+                        source_type="jira",
+                        source_id=str(ticket.id),
+                    )
+                    .first()
+                )
                 if existing:
                     ticket.analyzed = 1
                     continue
@@ -301,7 +325,9 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
             except Exception as e:
                 failed_count += 1
-                logger.error(f"Failed to analyze ticket {ticket.id} ({ticket.ticket_key}): {e}")
+                logger.error(
+                    f"Failed to analyze ticket {ticket.id} ({ticket.ticket_key}): {e}"
+                )
                 continue
 
         # Final commit
@@ -347,7 +373,11 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
     db = get_db()
 
     try:
-        developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+        developer = (
+            db.query(DeveloperProfile)
+            .filter(DeveloperProfile.id == developer_id)
+            .first()
+        )
         if not developer:
             return {"error": "Developer not found"}
 
@@ -356,7 +386,8 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
             db.query(CodeReview)
             .filter(
                 CodeReview.reviewer_id == developer_id,
-                CodeReview.quality_score == None,
+                CodeReview.quality_score
+                == None,  # noqa: E711 — SQLAlchemy IS NULL idiom, `is None` won't work here
             )
             .order_by(CodeReview.reviewed_at.desc())
             .limit(limit)
@@ -365,7 +396,8 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
 
         # Filter in Python: only reviews that have raw_comments stored
         reviews = [
-            r for r in reviews_query
+            r
+            for r in reviews_query
             if r.analysis_result and "raw_comments" in r.analysis_result
         ]
 
@@ -394,11 +426,15 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
                 review.analysis_result = {**review.analysis_result, **result}
 
                 # Dedup check
-                existing = db.query(WorkActivity).filter_by(
-                    developer_id=developer_id,
-                    source_type="git_review",
-                    source_id=str(review.id),
-                ).first()
+                existing = (
+                    db.query(WorkActivity)
+                    .filter_by(
+                        developer_id=developer_id,
+                        source_type="git_review",
+                        source_id=str(review.id),
+                    )
+                    .first()
+                )
 
                 if not existing:
                     work_activity = WorkActivity(
@@ -460,7 +496,11 @@ def analyze_slack_messages(developer_id: int, limit: int = 100):
     db = get_db()
 
     try:
-        developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+        developer = (
+            db.query(DeveloperProfile)
+            .filter(DeveloperProfile.id == developer_id)
+            .first()
+        )
         if not developer:
             return {"error": "Developer not found"}
 
@@ -491,11 +531,15 @@ def analyze_slack_messages(developer_id: int, limit: int = 100):
                     work_type = WorkType.OTHER
 
                 # Dedup check
-                existing = db.query(WorkActivity).filter_by(
-                    developer_id=developer_id,
-                    source_type="slack",
-                    source_id=msg.message_ts,
-                ).first()
+                existing = (
+                    db.query(WorkActivity)
+                    .filter_by(
+                        developer_id=developer_id,
+                        source_type="slack",
+                        source_id=msg.message_ts,
+                    )
+                    .first()
+                )
 
                 if not existing:
                     work_activity = WorkActivity(
@@ -558,11 +602,11 @@ def analyze_all_unanalyzed():
         for developer in developers:
             try:
                 # Analyze commits
-                commit_result = analyze_git_commits.delay(developer.id, limit=50)
+                analyze_git_commits.delay(developer.id, limit=50)
                 total_commits += 1
 
                 # Analyze tickets
-                ticket_result = analyze_jira_tickets.delay(developer.id, limit=50)
+                analyze_jira_tickets.delay(developer.id, limit=50)
                 total_tickets += 1
 
                 # Analyze code reviews
@@ -572,7 +616,9 @@ def analyze_all_unanalyzed():
                 analyze_slack_messages.delay(developer.id, limit=100)
 
             except Exception as e:
-                logger.error(f"Error triggering analysis for developer {developer.id}: {e}")
+                logger.error(
+                    f"Error triggering analysis for developer {developer.id}: {e}"
+                )
                 continue
 
         return {

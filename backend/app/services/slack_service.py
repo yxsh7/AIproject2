@@ -1,22 +1,24 @@
 """Slack integration service for fetching developer activity"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
 try:
     from slack_sdk import WebClient
-    from slack_sdk.errors import SlackApiError
+
     SLACK_AVAILABLE = True
 except ImportError:
     SLACK_AVAILABLE = False
-    logger.warning("slack_sdk not installed. Slack integration unavailable.")
 
-from app.models import DeveloperProfile, IntegrationConfig, IntegrationType
+from app.models import IntegrationConfig
 from app.models.slack_activity import SlackMessage, SlackReaction
 from app.utils.security import decrypt_secret
+
+logger = logging.getLogger(__name__)
+if not SLACK_AVAILABLE:
+    logger.warning("slack_sdk not installed. Slack integration unavailable.")
 
 
 class SlackService:
@@ -61,7 +63,9 @@ class SlackService:
 
         for channel_id in channel_ids:
             try:
-                channel_name = self._get_channel_name(channel_id)  # ONE call per channel
+                channel_name = self._get_channel_name(
+                    channel_id
+                )  # ONE call per channel
                 cursor = None
                 while True:
                     kwargs = {
@@ -87,7 +91,11 @@ class SlackService:
                             continue
 
                         # Dedup check
-                        existing = db.query(SlackMessage).filter_by(message_ts=message_ts).first()
+                        existing = (
+                            db.query(SlackMessage)
+                            .filter_by(message_ts=message_ts)
+                            .first()
+                        )
                         if existing:
                             continue
 
@@ -173,11 +181,15 @@ class SlackService:
                         target_user = message.get("user", "")
 
                         # Dedup check
-                        existing = db.query(SlackReaction).filter_by(
-                            developer_id=developer_id,
-                            reaction_name=reaction_name,
-                            target_message_ts=msg_ts,
-                        ).first()
+                        existing = (
+                            db.query(SlackReaction)
+                            .filter_by(
+                                developer_id=developer_id,
+                                reaction_name=reaction_name,
+                                target_message_ts=msg_ts,
+                            )
+                            .first()
+                        )
                         if existing:
                             continue
 
@@ -213,8 +225,12 @@ class SlackService:
         channel_ids: list[str],
         days_back: int = 7,
     ) -> dict:
-        messages = self.sync_messages_for_developer(db, developer_id, slack_user_id, channel_ids, days_back)
-        reactions = self.sync_reactions_for_developer(db, developer_id, slack_user_id, days_back)
+        messages = self.sync_messages_for_developer(
+            db, developer_id, slack_user_id, channel_ids, days_back
+        )
+        reactions = self.sync_reactions_for_developer(
+            db, developer_id, slack_user_id, days_back
+        )
         return {"messages": messages, "reactions": reactions}
 
     def _get_channel_name(self, channel_id: str) -> Optional[str]:

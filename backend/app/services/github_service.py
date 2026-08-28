@@ -1,4 +1,5 @@
 """GitHub integration service for fetching developer activity"""
+
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
 from github import Github, Auth, GithubException
@@ -11,7 +12,6 @@ from app.models import (
     PullRequest,
     CodeReview,
     IntegrationConfig,
-    IntegrationType,
 )
 from app.utils.security import decrypt_secret
 
@@ -88,7 +88,9 @@ class GitHubService:
             logger.error(f"Failed to fetch user {username}: {e}")
             return None
 
-    def _get_repos(self, org_name: Optional[str], repos: Optional[List[str]] = None) -> List:
+    def _get_repos(
+        self, org_name: Optional[str], repos: Optional[List[str]] = None
+    ) -> List:
         """
         Resolve the list of repos to scan.
 
@@ -115,10 +117,14 @@ class GitHubService:
                 org = self.client.get_organization(org_name)
                 return list(org.get_repos())
             except GithubException:
-                logger.info(f"Could not access org {org_name}, falling back to user repos")
+                logger.info(
+                    f"Could not access org {org_name}, falling back to user repos"
+                )
 
         user = self.client.get_user()
-        return list(user.get_repos(affiliation='owner,collaborator,organization_member'))
+        return list(
+            user.get_repos(affiliation="owner,collaborator,organization_member")
+        )
 
     def sync_commits_for_developer(
         self,
@@ -162,9 +168,7 @@ class GitHubService:
                     for commit in commits:
                         # Check if commit already exists
                         existing = (
-                            db.query(GitCommit)
-                            .filter_by(commit_sha=commit.sha)
-                            .first()
+                            db.query(GitCommit).filter_by(commit_sha=commit.sha).first()
                         )
 
                         if existing:
@@ -237,7 +241,9 @@ class GitHubService:
             for repo in repos:
                 try:
                     # Get all PRs (open and closed)
-                    pulls = repo.get_pulls(state="all", sort="created", direction="desc")
+                    pulls = repo.get_pulls(
+                        state="all", sort="created", direction="desc"
+                    )
 
                     for pr in pulls:
                         # Filter by author and date
@@ -336,7 +342,9 @@ class GitHubService:
             for repo in repos:
                 try:
                     # Get all PRs to check for reviews
-                    pulls = repo.get_pulls(state="all", sort="created", direction="desc")
+                    pulls = repo.get_pulls(
+                        state="all", sort="created", direction="desc"
+                    )
 
                     for pr in pulls:
                         if pr.created_at < since_date:
@@ -352,7 +360,9 @@ class GitHubService:
                             # Get corresponding PR in our database
                             db_pr = (
                                 db.query(PullRequest)
-                                .filter_by(repo_name=repo.full_name, pr_number=pr.number)
+                                .filter_by(
+                                    repo_name=repo.full_name, pr_number=pr.number
+                                )
                                 .first()
                             )
 
@@ -362,9 +372,7 @@ class GitHubService:
                             # Check if review already exists
                             existing = (
                                 db.query(CodeReview)
-                                .filter_by(
-                                    reviewer_id=developer.id, pr_id=db_pr.id
-                                )
+                                .filter_by(reviewer_id=developer.id, pr_id=db_pr.id)
                                 .first()
                             )
 
@@ -515,7 +523,9 @@ class GitHubService:
                     "private": repo.private,
                     "description": repo.description,
                     "language": repo.language,
-                    "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
+                    "updated_at": (
+                        repo.updated_at.isoformat() if repo.updated_at else None
+                    ),
                     "url": repo.html_url,
                 }
                 for repo in repos

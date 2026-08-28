@@ -1,9 +1,10 @@
 """Authentication service for user registration and login"""
+
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from app.models import User, DeveloperProfile
+from app.models import User
 from app.utils.security import verify_password, get_password_hash, create_access_token
 from app.config import settings
 

@@ -1,6 +1,6 @@
 """Celery application configuration"""
+
 from celery import Celery
-from celery.schedules import crontab
 
 from app.config import settings
 
@@ -38,13 +38,11 @@ celery_app.conf.beat_schedule = {
     #     "task": "app.tasks.sync_tasks.sync_all_github",
     #     "schedule": crontab(minute=0, hour="*/2"),
     # },
-
     # DISABLED: Sync Jira (manual trigger only)
     # "sync-jira-every-3-hours": {
     #     "task": "app.tasks.sync_tasks.sync_all_jira",
     #     "schedule": crontab(minute=0, hour="*/3"),
     # },
-
     # DISABLED: AI analysis (manual trigger only - COSTS MONEY)
     # "analyze-activities-every-4-hours": {
     #     "task": "app.tasks.analysis_tasks.analyze_all_unanalyzed",

@@ -1,11 +1,18 @@
 """Authentication API endpoints"""
+
 import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.auth import UserRegister, UserLogin, UserWithToken, UserResponse, RegisterMode
+from app.schemas.auth import (
+    UserRegister,
+    UserLogin,
+    UserWithToken,
+    UserResponse,
+    RegisterMode,
+)
 from app.services.auth_service import AuthService
 from app.api.dependencies import get_current_active_user
 from app.models import User, Organization, OrganizationInvite
@@ -26,7 +33,9 @@ def _slugify_unique(db: Session, name: str) -> str:
 
 def _redeem_invite(db: Session, code: str) -> OrganizationInvite:
     """Validate and return a usable invite, raising 400 if it can't be redeemed."""
-    invite = db.query(OrganizationInvite).filter(OrganizationInvite.code == code).first()
+    invite = (
+        db.query(OrganizationInvite).filter(OrganizationInvite.code == code).first()
+    )
     if not invite or not invite.is_active:
         raise HTTPException(status_code=400, detail="Invalid or expired invite code")
     if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
@@ -36,7 +45,9 @@ def _redeem_invite(db: Session, code: str) -> OrganizationInvite:
     return invite
 
 
-@router.post("/register", response_model=UserWithToken, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=UserWithToken, status_code=status.HTTP_201_CREATED
+)
 def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     Register a new user, either creating a new company (becoming its admin) or
@@ -93,7 +104,9 @@ def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token_for_user(user)
 
     return UserWithToken(
-        user=UserResponse.model_validate(user), access_token=access_token, token_type="bearer"
+        user=UserResponse.model_validate(user),
+        access_token=access_token,
+        token_type="bearer",
     )
 
 
@@ -128,7 +141,9 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token_for_user(user)
 
     return UserWithToken(
-        user=UserResponse.model_validate(user), access_token=access_token, token_type="bearer"
+        user=UserResponse.model_validate(user),
+        access_token=access_token,
+        token_type="bearer",
     )
 
 

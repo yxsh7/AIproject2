@@ -1,4 +1,5 @@
 """Base AI model factory for DevMetrics AI"""
+
 import json
 import logging
 import time
@@ -15,7 +16,9 @@ class AIAnalysisError(Exception):
     configured or every retry attempt failed. Callers must not substitute
     rule-based/heuristic data for this; the item should be left unanalyzed
     so it can be retried on a future run."""
+
     pass
+
 
 _OPENROUTER_HEADERS = {
     "HTTP-Referer": "http://localhost:3000",
@@ -52,24 +55,26 @@ def extract_json(text: str) -> Dict:
             pass
 
     # Walk braces to find the first complete {...} block
-    start = text.find('{')
+    start = text.find("{")
     if start != -1:
         depth = 0
         for i, ch in enumerate(text[start:], start):
-            if ch == '{':
+            if ch == "{":
                 depth += 1
-            elif ch == '}':
+            elif ch == "}":
                 depth -= 1
                 if depth == 0:
                     try:
-                        return json.loads(text[start:i + 1])
+                        return json.loads(text[start : i + 1])
                     except json.JSONDecodeError:
                         break
 
     raise ValueError(f"Could not extract JSON from LLM response: {text[:300]}")
 
 
-def invoke_and_parse_json(llm: Any, prompt: str, retries: int = 3, backoff_seconds: float = 1.5) -> Dict:
+def invoke_and_parse_json(
+    llm: Any, prompt: str, retries: int = 3, backoff_seconds: float = 1.5
+) -> Dict:
     """
     Call the LLM and parse its response as JSON, retrying transient failures
     (timeouts, truncated/malformed JSON, rate limits) before giving up.
@@ -88,11 +93,14 @@ def invoke_and_parse_json(llm: Any, prompt: str, retries: int = 3, backoff_secon
             if attempt < retries:
                 time.sleep(backoff_seconds * attempt)
 
-    raise AIAnalysisError(f"AI analysis failed after {retries} attempts: {last_error}") from last_error
+    raise AIAnalysisError(
+        f"AI analysis failed after {retries} attempts: {last_error}"
+    ) from last_error
 
 
 class _OpenRouterResponse:
     """Minimal wrapper so callers can do response.content"""
+
     def __init__(self, content: str):
         self.content = content
 
@@ -148,7 +156,9 @@ def get_ai_chat_model() -> Optional[Any]:
     """
     if settings.OPENROUTER_API_KEY:
         try:
-            model = settings.OPENROUTER_MODEL or "nvidia/nemotron-3-super-120b-a12b:free"
+            model = (
+                settings.OPENROUTER_MODEL or "nvidia/nemotron-3-super-120b-a12b:free"
+            )
             temperature = getattr(settings, "AI_MODEL_TEMPERATURE", 0.1)
             max_tokens = getattr(settings, "AI_MODEL_MAX_TOKENS", 1000)
             logger.info(f"Using OpenRouter model: {model}")
@@ -161,7 +171,10 @@ def get_ai_chat_model() -> Optional[Any]:
         except Exception as e:
             logger.warning(f"Failed to initialize OpenRouter client: {e}")
 
-    if getattr(settings, "ANTHROPIC_API_KEY", None) and settings.AI_MODEL_PROVIDER.lower() == "anthropic":
+    if (
+        getattr(settings, "ANTHROPIC_API_KEY", None)
+        and settings.AI_MODEL_PROVIDER.lower() == "anthropic"
+    ):
         try:
             import anthropic
 
@@ -201,7 +214,9 @@ def check_ai_available() -> bool:
 def get_ai_status() -> dict:
     """Returns current AI configuration status."""
     return {
-        "provider": "openrouter" if settings.OPENROUTER_API_KEY else settings.AI_MODEL_PROVIDER,
+        "provider": (
+            "openrouter" if settings.OPENROUTER_API_KEY else settings.AI_MODEL_PROVIDER
+        ),
         "model": settings.OPENROUTER_MODEL or settings.AI_MODEL_NAME,
         "available": check_ai_available(),
         "openrouter_configured": bool(settings.OPENROUTER_API_KEY),

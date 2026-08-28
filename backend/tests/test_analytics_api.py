@@ -4,15 +4,15 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 All DB interactions go through the `client` fixture which overrides
 the `get_db` dependency.
 """
-import pytest
+
 from datetime import date, timedelta
 
 from app.models.work_activity import WorkActivity, WorkType
-from app.models.productivity import ProductivityScore
 from tests.conftest import auth_header
 
 
 # ─── /developers/{id}/overview ───────────────────���────────────────────────────
+
 
 class TestDeveloperOverview:
     def test_requires_auth(self, client, developer_profile):
@@ -41,9 +41,7 @@ class TestDeveloperOverview:
         )
         assert r.status_code == 403
 
-    def test_manager_sees_any_developer(
-        self, client, manager_user, developer_profile
-    ):
+    def test_manager_sees_any_developer(self, client, manager_user, developer_profile):
         r = client.get(
             f"/api/analytics/developers/{developer_profile.id}/overview",
             headers=auth_header(manager_user),
@@ -72,6 +70,7 @@ class TestDeveloperOverview:
 
 # ─── /developers/{id}/productivity ──────────────────��─────────────────────────
 
+
 class TestDeveloperProductivity:
     def test_returns_404_with_no_activities(
         self, client, manager_user, developer_profile
@@ -95,7 +94,12 @@ class TestDeveloperProductivity:
         assert 0 <= body["overall_score"] <= 100
         assert "score_breakdown" in body
         assert set(body["score_breakdown"].keys()) == {
-            "complexity", "velocity", "quality", "impact", "collaboration", "mentoring"
+            "complexity",
+            "velocity",
+            "quality",
+            "impact",
+            "collaboration",
+            "mentoring",
         }
 
     def test_date_fallback_finds_old_data(
@@ -136,6 +140,7 @@ class TestDeveloperProductivity:
 
 # ─── /developers/{id}/trends ─────────────────────���────────────────────────────
 
+
 class TestDeveloperTrends:
     def test_returns_empty_trends_with_no_scores(
         self, client, manager_user, developer_profile
@@ -153,6 +158,7 @@ class TestDeveloperTrends:
         self, client, manager_user, developer_profile, work_activities, db
     ):
         from app.services.scoring_service import ProductivityScoringService
+
         service = ProductivityScoringService(db)
         for offset in [60, 30, 0]:
             end = date.today() - timedelta(days=offset)
@@ -174,6 +180,7 @@ class TestDeveloperTrends:
 
 
 # ─── /developers/{id}/work-breakdown ─────────────────────���────────────────────
+
 
 class TestWorkBreakdown:
     def test_returns_404_with_no_activities(
@@ -208,19 +215,22 @@ class TestWorkBreakdown:
         bins = r.json()["complexity_distribution"]
         assert set(bins.keys()) == {"low", "medium", "high"}
 
-    def test_fallback_finds_old_data(
-        self, client, manager_user, developer_profile, db
-    ):
+    def test_fallback_finds_old_data(self, client, manager_user, developer_profile, db):
         old_date = date.today() - timedelta(days=90)
-        db.add(WorkActivity(
-            developer_id=developer_profile.id,
-            organization_id=developer_profile.organization_id,
-            source_type="git", source_id="old-2",
-            work_type=WorkType.DOCUMENTATION,
-            activity_date=old_date,
-            complexity_score=3, impact_score=4, quality_score=6,
-            ai_analysis={},
-        ))
+        db.add(
+            WorkActivity(
+                developer_id=developer_profile.id,
+                organization_id=developer_profile.organization_id,
+                source_type="git",
+                source_id="old-2",
+                work_type=WorkType.DOCUMENTATION,
+                activity_date=old_date,
+                complexity_score=3,
+                impact_score=4,
+                quality_score=6,
+                ai_analysis={},
+            )
+        )
         db.commit()
 
         r = client.get(
@@ -232,10 +242,9 @@ class TestWorkBreakdown:
 
 # ─── /teams/{team}/overview ───────────────────────────────────────────────────
 
+
 class TestTeamOverview:
-    def test_developer_cannot_access(
-        self, client, developer_user, developer_profile
-    ):
+    def test_developer_cannot_access(self, client, developer_user, developer_profile):
         r = client.get(
             "/api/analytics/teams/backend/overview",
             headers=auth_header(developer_user),
@@ -276,11 +285,10 @@ class TestTeamOverview:
 
 # ─── /developers/{id}/insights ─────────────────────────���──────────────────────
 
+
 class TestDeveloperInsights:
     def test_requires_auth(self, client, developer_profile):
-        r = client.get(
-            f"/api/analytics/developers/{developer_profile.id}/insights"
-        )
+        r = client.get(f"/api/analytics/developers/{developer_profile.id}/insights")
         assert r.status_code == 403
 
     def test_returns_200_for_valid_developer(
@@ -321,6 +329,7 @@ class TestDeveloperInsights:
 # even though both orgs use identical resource-id shapes and (deliberately,
 # for the team test) the same team name.
 
+
 class TestCrossOrgIsolation:
     def test_manager_cannot_view_other_org_developer(
         self, client, manager_user, org2_developer_profile
@@ -341,21 +350,33 @@ class TestCrossOrgIsolation:
         assert r.status_code == 404
 
     def test_team_overview_does_not_blend_across_orgs(
-        self, client, manager_user, developer_profile, org2_manager_user, org2_developer_profile, db
+        self,
+        client,
+        manager_user,
+        developer_profile,
+        org2_manager_user,
+        org2_developer_profile,
+        db,
     ):
         """Both orgs have a developer on a team literally named 'backend' — each
         manager's team-overview call must only ever see their own org's developer."""
         from app.models.work_activity import WorkActivity, WorkType
         from datetime import date
 
-        db.add(WorkActivity(
-            developer_id=org2_developer_profile.id,
-            organization_id=org2_developer_profile.organization_id,
-            source_type="git", source_id="org2-commit",
-            work_type=WorkType.CODE, activity_date=date.today(),
-            complexity_score=5, impact_score=5, quality_score=5,
-            ai_analysis={},
-        ))
+        db.add(
+            WorkActivity(
+                developer_id=org2_developer_profile.id,
+                organization_id=org2_developer_profile.organization_id,
+                source_type="git",
+                source_id="org2-commit",
+                work_type=WorkType.CODE,
+                activity_date=date.today(),
+                complexity_score=5,
+                impact_score=5,
+                quality_score=5,
+                ai_analysis={},
+            )
+        )
         db.commit()
 
         r = client.get(

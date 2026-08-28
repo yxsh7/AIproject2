@@ -1,4 +1,5 @@
 """Main FastAPI application"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -67,9 +68,13 @@ async def health_check():
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(developers.router, prefix="/api/developers", tags=["Developers"])
-app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
+app.include_router(
+    integrations.router, prefix="/api/integrations", tags=["Integrations"]
+)
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
-app.include_router(organizations.router, prefix="/api/organizations", tags=["Organizations"])
+app.include_router(
+    organizations.router, prefix="/api/organizations", tags=["Organizations"]
+)
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 

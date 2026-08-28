@@ -1,6 +1,6 @@
 """Jira activity models (tickets and comments)"""
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Float
-from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -12,10 +12,14 @@ class JiraTicket(Base):
     __tablename__ = "jira_tickets"
 
     id = Column(Integer, primary_key=True, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
 
     # Ticket details
-    ticket_key = Column(String, unique=True, nullable=False, index=True)  # e.g., PROJ-123
+    ticket_key = Column(
+        String, unique=True, nullable=False, index=True
+    )  # e.g., PROJ-123
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String, nullable=False, index=True)  # open, in_progress, done, etc.
@@ -61,8 +65,12 @@ class JiraComment(Base):
     __tablename__ = "jira_comments"
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("jira_tickets.id"), nullable=False, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    ticket_id = Column(
+        Integer, ForeignKey("jira_tickets.id"), nullable=False, index=True
+    )
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
 
     # Comment details
     comment_id = Column(String, nullable=False, index=True)  # Jira comment ID

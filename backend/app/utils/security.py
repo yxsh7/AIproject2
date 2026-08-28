@@ -1,4 +1,5 @@
 """Security utilities for authentication and authorization"""
+
 import base64
 import hashlib
 from datetime import datetime, timedelta, timezone
@@ -63,7 +64,9 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+) -> str:
     """
     Create a JWT access token
 
@@ -79,7 +82,9 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
     to_encode.update({"exp": expire})
 

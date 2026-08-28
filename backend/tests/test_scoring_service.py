@@ -6,6 +6,7 @@ Split into two sections:
   - Integration tests: exercise calculate_developer_score / calculate_team_scores
     against an in-memory SQLite database via the fixtures in conftest.py.
 """
+
 import pytest
 from datetime import date, timedelta
 
@@ -16,8 +17,15 @@ from app.services.scoring_service import ProductivityScoringService, ROLE_WEIGHT
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _activity(work_type=WorkType.CODE, complexity=6, quality=7, impact=5,
-              days_ago=0, ai_analysis=None):
+
+def _activity(
+    work_type=WorkType.CODE,
+    complexity=6,
+    quality=7,
+    impact=5,
+    days_ago=0,
+    ai_analysis=None,
+):
     """Build a WorkActivity instance without a DB session."""
     return WorkActivity(
         developer_id=1,
@@ -33,8 +41,9 @@ def _activity(work_type=WorkType.CODE, complexity=6, quality=7, impact=5,
 
 
 def _dev(role=RoleLevel.MID):
-    return DeveloperProfile(id=1, user_id=1, organization_id=1,
-                            role_level=role, team="backend")
+    return DeveloperProfile(
+        id=1, user_id=1, organization_id=1, role_level=role, team="backend"
+    )
 
 
 def _service():
@@ -44,19 +53,33 @@ def _service():
 
 # ─── Pure unit tests (no DB) ──────────────────────────────────────────────────
 
+
 class TestComplexityScore:
     def test_averages_activity_scores(self):
-        acts = [_activity(complexity=4), _activity(complexity=8), _activity(complexity=6)]
+        acts = [
+            _activity(complexity=4),
+            _activity(complexity=8),
+            _activity(complexity=6),
+        ]
         assert _service()._calculate_complexity_score(acts) == pytest.approx(6.0)
 
     def test_empty_list_returns_zero(self):
         assert _service()._calculate_complexity_score([]) == 0.0
 
     def test_no_scores_returns_neutral(self):
-        acts = [WorkActivity(complexity_score=None, developer_id=1,
-                             source_type="git", source_id="a",
-                             work_type=WorkType.CODE, activity_date=date.today(),
-                             impact_score=5, quality_score=5, ai_analysis={})]
+        acts = [
+            WorkActivity(
+                complexity_score=None,
+                developer_id=1,
+                source_type="git",
+                source_id="a",
+                work_type=WorkType.CODE,
+                activity_date=date.today(),
+                impact_score=5,
+                quality_score=5,
+                ai_analysis={},
+            )
+        ]
         assert _service()._calculate_complexity_score(acts) == 5.0
 
 
@@ -71,7 +94,12 @@ class TestQualityScore:
 
 class TestVelocityScore:
     def test_zero_activities_returns_zero(self):
-        assert _service()._calculate_velocity_score([], date.today() - timedelta(30), date.today()) == 0.0
+        assert (
+            _service()._calculate_velocity_score(
+                [], date.today() - timedelta(30), date.today()
+            )
+            == 0.0
+        )
 
     def test_high_frequency_approaches_ten(self):
         # 20 activities spread over 14 days → ~10/week → capped at 10
@@ -142,7 +170,9 @@ class TestRoleWeights:
 class TestComputeScore:
     def test_empty_activities_returns_none(self):
         dev = _dev()
-        result = _service()._compute_score(dev, [], date.today() - timedelta(30), date.today())
+        result = _service()._compute_score(
+            dev, [], date.today() - timedelta(30), date.today()
+        )
         assert result is None
 
     def test_score_in_valid_range(self):
@@ -167,16 +197,18 @@ class TestComputeScore:
 
     def test_work_breakdown_sums_to_100(self):
         dev = _dev()
-        acts = (
-            [_activity(work_type=WorkType.CODE, days_ago=i) for i in range(6)] +
-            [_activity(work_type=WorkType.CODE_REVIEW, days_ago=i) for i in range(4)]
+        acts = [_activity(work_type=WorkType.CODE, days_ago=i) for i in range(6)] + [
+            _activity(work_type=WorkType.CODE_REVIEW, days_ago=i) for i in range(4)
+        ]
+        result = _service()._compute_score(
+            dev, acts, date.today() - timedelta(9), date.today()
         )
-        result = _service()._compute_score(dev, acts, date.today() - timedelta(9), date.today())
         total = sum(result.work_breakdown.values())
         assert total == pytest.approx(100.0)
 
 
 # ─── Integration tests (uses DB fixture from conftest) ────────────────────────
+
 
 class TestCalculateDeveloperScore:
     def test_no_activities_returns_none(self, db, developer_profile):
@@ -184,10 +216,14 @@ class TestCalculateDeveloperScore:
         result = service.calculate_developer_score(developer_profile.id)
         assert result is None
 
-    def test_returns_score_with_activities(self, db, developer_profile, work_activities):
+    def test_returns_score_with_activities(
+        self, db, developer_profile, work_activities
+    ):
         service = ProductivityScoringService(db)
         start = date.today() - timedelta(days=15)
-        result = service.calculate_developer_score(developer_profile.id, start, date.today())
+        result = service.calculate_developer_score(
+            developer_profile.id, start, date.today()
+        )
         assert result is not None
         assert 0 <= result.overall_score <= 100
         assert result.developer_id == developer_profile.id
@@ -199,7 +235,9 @@ class TestCalculateDeveloperScore:
     def test_score_saved_and_retrieved(self, db, developer_profile, work_activities):
         service = ProductivityScoringService(db)
         start = date.today() - timedelta(days=15)
-        score = service.calculate_developer_score(developer_profile.id, start, date.today())
+        score = service.calculate_developer_score(
+            developer_profile.id, start, date.today()
+        )
         saved = service.save_score(score)
         assert saved.id is not None
 
@@ -219,7 +257,9 @@ class TestCalculateTeamScores:
     ):
         service = ProductivityScoringService(db)
         start = date.today() - timedelta(days=15)
-        result = service.calculate_team_scores("backend", developer_profile.organization_id, start, date.today())
+        result = service.calculate_team_scores(
+            "backend", developer_profile.organization_id, start, date.today()
+        )
 
         assert "error" not in result
         assert result["team_size"] >= 1
@@ -231,7 +271,6 @@ class TestCalculateTeamScores:
     ):
         """Verify calculate_team_scores issues exactly 2 DB queries (devs + activities),
         not N+1."""
-        from unittest.mock import patch, call
         from sqlalchemy import event
 
         # Read this before installing the query-capture listener: SQLAlchemy expires

@@ -1,4 +1,5 @@
 """AI agent for analyzing code review quality"""
+
 import logging
 
 from app.ai.base import get_ai_chat_model, invoke_and_parse_json, AIAnalysisError

@@ -1,9 +1,9 @@
 """Productivity scoring service with role-based evaluation"""
+
 import logging
-from datetime import datetime, timedelta, date
-from typing import Dict, List, Optional, Tuple
+from datetime import timedelta, date
+from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
 
 from app.models import (
     DeveloperProfile,
@@ -88,7 +88,9 @@ class ProductivityScoringService:
             return None
 
         complexity_score = self._calculate_complexity_score(activities)
-        velocity_score = self._calculate_velocity_score(activities, start_date, end_date)
+        velocity_score = self._calculate_velocity_score(
+            activities, start_date, end_date
+        )
         quality_score = self._calculate_quality_score(activities)
         impact_score = self._calculate_impact_score(activities)
         collaboration_score = self._calculate_collaboration_score(activities)
@@ -146,9 +148,11 @@ class ProductivityScoringService:
         end_date: Optional[date] = None,
     ) -> Optional[ProductivityScore]:
         """Calculate productivity score for a developer over a time period."""
-        developer = self.db.query(DeveloperProfile).filter(
-            DeveloperProfile.id == developer_id
-        ).first()
+        developer = (
+            self.db.query(DeveloperProfile)
+            .filter(DeveloperProfile.id == developer_id)
+            .first()
+        )
 
         if not developer:
             logger.error(f"Developer {developer_id} not found")
@@ -180,7 +184,9 @@ class ProductivityScoringService:
         if not activities:
             return 0.0
 
-        complexity_scores = [a.complexity_score for a in activities if a.complexity_score]
+        complexity_scores = [
+            a.complexity_score for a in activities if a.complexity_score
+        ]
         if not complexity_scores:
             return 5.0  # Neutral if no data
 
@@ -413,18 +419,22 @@ class ProductivityScoringService:
                 developer, activities_by_dev.get(developer.id, []), start_date, end_date
             )
             if score:
-                individual_scores.append({
-                    "developer_id": developer.id,
-                    "developer_name": developer.user.full_name if developer.user else "Unknown",
-                    "role_level": developer.role_level.value,
-                    "overall_score": score.overall_score,
-                    "complexity_score": score.complexity_score,
-                    "velocity_score": score.velocity_score,
-                    "quality_score": score.quality_score,
-                    "impact_score": score.impact_score,
-                    "collaboration_score": score.collaboration_score,
-                    "mentoring_score": score.mentoring_score,
-                })
+                individual_scores.append(
+                    {
+                        "developer_id": developer.id,
+                        "developer_name": (
+                            developer.user.full_name if developer.user else "Unknown"
+                        ),
+                        "role_level": developer.role_level.value,
+                        "overall_score": score.overall_score,
+                        "complexity_score": score.complexity_score,
+                        "velocity_score": score.velocity_score,
+                        "quality_score": score.quality_score,
+                        "impact_score": score.impact_score,
+                        "collaboration_score": score.collaboration_score,
+                        "mentoring_score": score.mentoring_score,
+                    }
+                )
 
         if not individual_scores:
             return {"error": "No activity data for team"}
@@ -465,9 +475,7 @@ class ProductivityScoringService:
 
         return aggregate
 
-    def get_score_trends(
-        self, developer_id: int, periods: int = 12
-    ) -> List[Dict]:
+    def get_score_trends(self, developer_id: int, periods: int = 12) -> List[Dict]:
         """
         Get historical productivity score trends
 

@@ -1,4 +1,5 @@
 """Git activity models (commits, PRs, code reviews)"""
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -12,7 +13,9 @@ class GitCommit(Base):
     __tablename__ = "git_commits"
 
     id = Column(Integer, primary_key=True, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
 
     # Commit details
     repo_name = Column(String, nullable=False, index=True)
@@ -53,7 +56,9 @@ class PullRequest(Base):
     __tablename__ = "pull_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
 
     # PR details
     repo_name = Column(String, nullable=False, index=True)
@@ -95,12 +100,16 @@ class CodeReview(Base):
     __tablename__ = "code_reviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    reviewer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    reviewer_id = Column(
+        Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True
+    )
     pr_id = Column(Integer, ForeignKey("pull_requests.id"), nullable=False)
 
     # Review details
     comment_count = Column(Integer, default=0)
-    review_state = Column(String, nullable=True)  # approved, changes_requested, commented
+    review_state = Column(
+        String, nullable=True
+    )  # approved, changes_requested, commented
 
     # Timestamps
     reviewed_at = Column(DateTime(timezone=True), nullable=False, index=True)
@@ -117,7 +126,9 @@ class CodeReview(Base):
     # }
 
     # Relationships
-    reviewer = relationship("DeveloperProfile", back_populates="code_reviews", foreign_keys=[reviewer_id])
+    reviewer = relationship(
+        "DeveloperProfile", back_populates="code_reviews", foreign_keys=[reviewer_id]
+    )
     pull_request = relationship("PullRequest", back_populates="code_reviews")
 
     def __repr__(self):

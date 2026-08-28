@@ -1,4 +1,5 @@
 """Superadmin (platform-level) API endpoints — cross-organization visibility and controls"""
+
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -58,9 +59,13 @@ def get_organization(
     """Get a single organization's detail and stats."""
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
-    user_count = db.query(func.count(User.id)).filter(User.organization_id == org_id).scalar()
+    user_count = (
+        db.query(func.count(User.id)).filter(User.organization_id == org_id).scalar()
+    )
     developer_count = (
         db.query(func.count(DeveloperProfile.id))
         .filter(DeveloperProfile.organization_id == org_id)
@@ -89,13 +94,17 @@ def update_organization(
     subsequent request from that org's users via get_current_active_user."""
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     org.is_active = data.is_active
     db.commit()
     db.refresh(org)
 
-    user_count = db.query(func.count(User.id)).filter(User.organization_id == org_id).scalar()
+    user_count = (
+        db.query(func.count(User.id)).filter(User.organization_id == org_id).scalar()
+    )
     developer_count = (
         db.query(func.count(DeveloperProfile.id))
         .filter(DeveloperProfile.organization_id == org_id)
@@ -120,7 +129,9 @@ def list_all_users(
     _current_user: User = Depends(require_superadmin),
 ):
     """List users across every organization, optionally filtered to one org."""
-    query = db.query(User, Organization.name).join(Organization, User.organization_id == Organization.id)
+    query = db.query(User, Organization.name).join(
+        Organization, User.organization_id == Organization.id
+    )
     if organization_id is not None:
         query = query.filter(User.organization_id == organization_id)
 
@@ -151,7 +162,9 @@ def update_user(
     """Deactivate or reactivate a user."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     user.is_active = data.is_active
     db.commit()

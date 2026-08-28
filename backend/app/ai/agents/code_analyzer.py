@@ -1,4 +1,5 @@
 """Code Complexity Analyzer Agent"""
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -18,7 +19,9 @@ class CodeComplexityAnalyzer:
         if self.llm:
             logger.info("Code Analyzer initialized with AI model")
         else:
-            logger.warning("Code Analyzer has no AI provider configured — analysis will fail")
+            logger.warning(
+                "Code Analyzer has no AI provider configured — analysis will fail"
+            )
 
     def analyze_commit(
         self,

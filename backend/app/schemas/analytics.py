@@ -1,4 +1,5 @@
 """Analytics and productivity schemas"""
+
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 from datetime import date
@@ -222,7 +223,9 @@ class ScoreCalculationRequest(BaseModel):
     start_date: Optional[date] = Field(
         default=None, description="Start of evaluation period"
     )
-    end_date: Optional[date] = Field(default=None, description="End of evaluation period")
+    end_date: Optional[date] = Field(
+        default=None, description="End of evaluation period"
+    )
     force_recalculate: bool = Field(
         default=False, description="Force recalculation even if recent score exists"
     )

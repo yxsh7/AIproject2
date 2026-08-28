@@ -1,4 +1,5 @@
 """Authentication schemas"""
+
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 from datetime import datetime
@@ -24,7 +25,9 @@ class UserRegister(BaseModel):
     """
 
     email: EmailStr
-    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    password: str = Field(
+        ..., min_length=8, description="Password must be at least 8 characters"
+    )
     full_name: str = Field(..., min_length=2)
     mode: RegisterMode
     organization_name: Optional[str] = Field(
@@ -37,7 +40,9 @@ class UserRegister(BaseModel):
     @model_validator(mode="after")
     def _validate_mode_fields(self):
         if self.mode == RegisterMode.CREATE_ORG and not self.organization_name:
-            raise ValueError("organization_name is required when creating a new company")
+            raise ValueError(
+                "organization_name is required when creating a new company"
+            )
         if self.mode == RegisterMode.JOIN_ORG and not self.invite_code:
             raise ValueError("invite_code is required when joining with an invite code")
         return self

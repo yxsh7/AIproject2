@@ -1,4 +1,5 @@
 """Background tasks for syncing data from GitHub, Jira, and Slack"""
+
 import logging
 from datetime import datetime, timezone
 
@@ -43,7 +44,9 @@ def sync_integration_task(integration_id: int, days_back: int = 30):
             logger.error(f"Integration {integration_id} not found")
             return {"error": "Integration not found"}
 
-        logger.info(f"Starting sync for integration {integration_id} ({integration.type})")
+        logger.info(
+            f"Starting sync for integration {integration_id} ({integration.type})"
+        )
 
         # Update status to syncing
         integration.status = IntegrationStatus.SYNCING
@@ -144,9 +147,7 @@ def sync_github_integration(
                 )
 
             except Exception as e:
-                logger.error(
-                    f"Error syncing GitHub for developer {developer.id}: {e}"
-                )
+                logger.error(f"Error syncing GitHub for developer {developer.id}: {e}")
                 continue
 
         return {
@@ -290,7 +291,9 @@ def sync_all_github():
         results = []
         for integration in integrations:
             try:
-                result = sync_github_integration(db, integration, days_back=7)  # Last week
+                result = sync_github_integration(
+                    db, integration, days_back=7
+                )  # Last week
                 results.append({"integration_id": integration.id, "result": result})
 
                 # Update last_sync_at
@@ -330,7 +333,9 @@ def sync_all_jira():
         results = []
         for integration in integrations:
             try:
-                result = sync_jira_integration(db, integration, days_back=30)  # Last month
+                result = sync_jira_integration(
+                    db, integration, days_back=30
+                )  # Last month
                 results.append({"integration_id": integration.id, "result": result})
 
                 # Update last_sync_at

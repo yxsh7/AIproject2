@@ -1,5 +1,14 @@
 """Organization invite model"""
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Enum as SQLEnum,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -13,9 +22,14 @@ class OrganizationInvite(Base):
     __tablename__ = "organization_invites"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
     code = Column(String, unique=True, index=True, nullable=False)
-    role = Column(SQLEnum(UserRole, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    role = Column(
+        SQLEnum(UserRole, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     max_uses = Column(Integer, nullable=True)  # null = unlimited
     used_count = Column(Integer, default=0, nullable=False)

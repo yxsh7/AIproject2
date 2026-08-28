@@ -1,4 +1,5 @@
 """Organization and invite-code API endpoints"""
+
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
@@ -27,11 +28,15 @@ def get_my_organization(
     """Get the current user's organization."""
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
     return org
 
 
-@router.post("/invites", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invites", response_model=InviteResponse, status_code=status.HTTP_201_CREATED
+)
 def create_invite(
     data: InviteCreate,
     db: Session = Depends(get_db),
@@ -92,11 +97,16 @@ def revoke_invite(
     """Revoke an invite code (admin only)."""
     invite = (
         db.query(OrganizationInvite)
-        .filter(OrganizationInvite.id == invite_id, OrganizationInvite.organization_id == org_id)
+        .filter(
+            OrganizationInvite.id == invite_id,
+            OrganizationInvite.organization_id == org_id,
+        )
         .first()
     )
     if not invite:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found"
+        )
 
     invite.is_active = False
     db.commit()

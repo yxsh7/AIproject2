@@ -1,11 +1,10 @@
 """Analytics and productivity API endpoints"""
+
 import logging
-from typing import List, Optional
+from typing import Optional
 from datetime import date, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.schemas.analytics import (
@@ -14,7 +13,6 @@ from app.schemas.analytics import (
     DeveloperTrendsResponse,
     WorkBreakdownResponse,
     TeamAnalyticsOverview,
-    DeveloperComparisonResponse,
     DeveloperInsightsResponse,
     ScoreCalculationRequest,
     ScoreCalculationResponse,
@@ -22,14 +20,15 @@ from app.schemas.analytics import (
     WorkActivityResponse,
     TrendDataPoint,
     TeamMemberScore,
-    ComparisonData,
     InsightResponse,
 )
-from app.models import User, DeveloperProfile, WorkActivity, ProductivityScore
+from app.models import User, DeveloperProfile, WorkActivity
 from app.models.developer import RoleLevel
 from app.api.dependencies import get_current_active_user, get_current_org_id
 from app.services.scoring_service import ProductivityScoringService, ROLE_WEIGHTS
 from app.services.insights_service import InsightsService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,7 +37,9 @@ def check_analytics_access(
     current_user: User, developer_id: int, org_id: int, db: Session
 ) -> bool:
     """Check if user has access to developer's analytics. Cross-org access is always denied."""
-    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    developer = (
+        db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    )
     if developer is None or developer.organization_id != org_id:
         return False
     if current_user.role in ["manager", "admin"]:
@@ -52,9 +53,13 @@ def _get_developer_or_raise(
     """Fetch developer by id, raising 403/404 as appropriate. A developer belonging to
     another organization is treated as not found (404), not forbidden, so callers can't
     use this endpoint to confirm another tenant's data exists."""
-    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    developer = (
+        db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    )
     if developer is None or developer.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found"
+        )
     if not check_analytics_access(current_user, developer_id, org_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -110,7 +115,9 @@ def _resolve_dates(
     return start_date, end_date
 
 
-@router.get("/developers/{developer_id}/overview", response_model=DeveloperAnalyticsOverview)
+@router.get(
+    "/developers/{developer_id}/overview", response_model=DeveloperAnalyticsOverview
+)
 def get_developer_overview(
     developer_id: int,
     start_date: Optional[date] = Query(default=None),
@@ -164,7 +171,9 @@ def get_developer_overview(
     productivity_score = scoring_service.get_latest_score(developer_id)
     # If no saved score exists yet, calculate and save one now
     if not productivity_score:
-        new_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+        new_score = scoring_service.calculate_developer_score(
+            developer_id, start_date, end_date
+        )
         if new_score:
             productivity_score = scoring_service.save_score(new_score)
 
@@ -173,26 +182,41 @@ def get_developer_overview(
         "total_commits": sum(1 for a in activities if a.source_type == "git"),
         "total_tickets": sum(1 for a in activities if a.source_type == "jira"),
         "days_active": len(set(a.activity_date for a in activities)),
-        "avg_complexity": round(
-            sum(a.complexity_score for a in activities if a.complexity_score is not None) /
-            max(len([a for a in activities if a.complexity_score is not None]), 1), 2
-        )
-        if activities
-        else 0,
-        "avg_impact": round(
-            sum(a.impact_score for a in activities if a.impact_score is not None) /
-            max(len([a for a in activities if a.impact_score is not None]), 1), 2
-        )
-        if activities
-        else 0,
+        "avg_complexity": (
+            round(
+                sum(
+                    a.complexity_score
+                    for a in activities
+                    if a.complexity_score is not None
+                )
+                / max(
+                    len([a for a in activities if a.complexity_score is not None]), 1
+                ),
+                2,
+            )
+            if activities
+            else 0
+        ),
+        "avg_impact": (
+            round(
+                sum(a.impact_score for a in activities if a.impact_score is not None)
+                / max(len([a for a in activities if a.impact_score is not None]), 1),
+                2,
+            )
+            if activities
+            else 0
+        ),
     }
 
-    work_breakdown = (productivity_score.work_breakdown or {}) if productivity_score else {}
+    work_breakdown = (
+        (productivity_score.work_breakdown or {}) if productivity_score else {}
+    )
 
     # Explicitly validate ORM → Pydantic to avoid implicit coercion issues
     score_response = (
         ProductivityScoreResponse.model_validate(productivity_score)
-        if productivity_score else None
+        if productivity_score
+        else None
     )
 
     return DeveloperAnalyticsOverview(
@@ -208,7 +232,10 @@ def get_developer_overview(
     )
 
 
-@router.get("/developers/{developer_id}/productivity", response_model=DeveloperProductivityResponse)
+@router.get(
+    "/developers/{developer_id}/productivity",
+    response_model=DeveloperProductivityResponse,
+)
 def get_developer_productivity(
     developer_id: int,
     start_date: Optional[date] = Query(default=None),
@@ -245,7 +272,9 @@ def get_developer_productivity(
     start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
 
     scoring_service = ProductivityScoringService(db)
-    productivity_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+    productivity_score = scoring_service.calculate_developer_score(
+        developer_id, start_date, end_date
+    )
 
     if not productivity_score:
         raise HTTPException(
@@ -361,7 +390,9 @@ def get_developer_trends(
             "latest_score": latest_score,
             "previous_score": previous_score,
             "change": round(change, 2),
-            "trend_direction": "improving" if change > 0 else "declining" if change < 0 else "stable",
+            "trend_direction": (
+                "improving" if change > 0 else "declining" if change < 0 else "stable"
+            ),
             "average_score": round(
                 sum(t["overall_score"] for t in trends_data) / len(trends_data), 2
             ),
@@ -377,7 +408,9 @@ def get_developer_trends(
     )
 
 
-@router.get("/developers/{developer_id}/work-breakdown", response_model=WorkBreakdownResponse)
+@router.get(
+    "/developers/{developer_id}/work-breakdown", response_model=WorkBreakdownResponse
+)
 def get_work_breakdown(
     developer_id: int,
     start_date: Optional[date] = Query(default=None),
@@ -514,7 +547,9 @@ def get_team_overview(
     # Calculate team scores (scoped to the caller's organization, so a same-named
     # team in another org never blends into these results)
     scoring_service = ProductivityScoringService(db)
-    team_data = scoring_service.calculate_team_scores(team, org_id, start_date, end_date)
+    team_data = scoring_service.calculate_team_scores(
+        team, org_id, start_date, end_date
+    )
 
     if "error" in team_data:
         raise HTTPException(
@@ -611,7 +646,9 @@ def calculate_productivity_score(
     )
 
 
-@router.get("/developers/{developer_id}/insights", response_model=DeveloperInsightsResponse)
+@router.get(
+    "/developers/{developer_id}/insights", response_model=DeveloperInsightsResponse
+)
 def get_developer_insights(
     developer_id: int,
     start_date: Optional[date] = Query(default=None),
@@ -677,15 +714,25 @@ def get_developer_insights(
             if include:
                 # Rebuild recommendations from action_items
                 action_items = insight.action_items or []
-                recs = [a["action"] for a in action_items if isinstance(a, dict) and "action" in a]
-                insights_data.append({
-                    "insight_type": insight.insight_type.value,
-                    "title": insight.title,
-                    "description": insight.description,
-                    "confidence": sd.get("confidence", 0.5),
-                    "recommendations": recs,
-                    "supporting_data": {k: v for k, v in sd.items() if k not in ("confidence", "period_start", "period_end")},
-                })
+                recs = [
+                    a["action"]
+                    for a in action_items
+                    if isinstance(a, dict) and "action" in a
+                ]
+                insights_data.append(
+                    {
+                        "insight_type": insight.insight_type.value,
+                        "title": insight.title,
+                        "description": insight.description,
+                        "confidence": sd.get("confidence", 0.5),
+                        "recommendations": recs,
+                        "supporting_data": {
+                            k: v
+                            for k, v in sd.items()
+                            if k not in ("confidence", "period_start", "period_end")
+                        },
+                    }
+                )
 
         # If no cached insights, generate new ones
         if not insights_data:
@@ -700,7 +747,8 @@ def get_developer_insights(
     patterns_detected = [
         insight["title"]
         for insight in insights_data
-        if insight["insight_type"] in ["trend", "individual"]  # Updated to match InsightType values
+        if insight["insight_type"]
+        in ["trend", "individual"]  # Updated to match InsightType values
     ]
 
     anomalies = [
@@ -755,19 +803,27 @@ def _run_analysis_pipeline(developer_id: int, limit: int) -> None:
         end_date = date.today()
         start_date = end_date - timedelta(days=90)  # Wide window to capture seeded data
         scoring_service = ProductivityScoringService(db)
-        score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+        score = scoring_service.calculate_developer_score(
+            developer_id, start_date, end_date
+        )
         if score:
             scoring_service.save_score(score)
-            logger.info(f"Saved updated score for developer {developer_id}: {score.overall_score}")
+            logger.info(
+                f"Saved updated score for developer {developer_id}: {score.overall_score}"
+            )
 
         # Step 3: Generate and save insights
         insights_service = InsightsService(db)
-        insights = insights_service.generate_developer_insights(developer_id, start_date, end_date)
+        insights = insights_service.generate_developer_insights(
+            developer_id, start_date, end_date
+        )
         if insights:
             insights_service.save_insights(developer_id, insights, start_date, end_date)
             logger.info(f"Saved {len(insights)} insights for developer {developer_id}")
     except Exception as e:
-        logger.error(f"Post-analysis scoring/insights failed for developer {developer_id}: {e}")
+        logger.error(
+            f"Post-analysis scoring/insights failed for developer {developer_id}: {e}"
+        )
     finally:
         db.close()
 
@@ -798,7 +854,9 @@ def trigger_ai_analysis(
     # Verify developer exists and belongs to the caller's organization
     developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
-    developer_name = developer.user.full_name if developer.user else f"developer {developer_id}"
+    developer_name = (
+        developer.user.full_name if developer.user else f"developer {developer_id}"
+    )
     background_tasks.add_task(_run_analysis_pipeline, developer_id, limit)
 
     return {
