@@ -122,3 +122,143 @@
     transform: translateY(0);
   }
 }
+
+/* ── "dm-*" design system ──────────────────────────────────────────────────
+   Used by the register, superadmin, manager, integrations, and settings
+   pages (plus components/ui/form-field.tsx). Values below match the literal
+   colors already hardcoded as siblings to each var() throughout those
+   files — e.g. --red pairs with rgba(248,113,113,...) everywhere it's used,
+   --cyan pairs with rgba(129,140,248,...) (an indigo, despite the name —
+   kept as-is to match the app's established accent color). */
+:root {
+  --surf-0: #030711;
+  --surf-1: #0d1220;
+  --surf-2: #161d30;
+
+  --txt-1: #f1f5f9;
+  --txt-2: #94a3b8;
+  --txt-3: #64748b;
+
+  --border-0: rgba(148, 163, 184, 0.08);
+  --border-1: rgba(148, 163, 184, 0.16);
+
+  --cyan: #818cf8;
+  --cyan-dim: rgba(129, 140, 248, 0.1);
+
+  --red: #f87171;
+  --red-dim: rgba(248, 113, 113, 0.1);
+  --green: #4ade80;
+  --green-dim: rgba(74, 222, 128, 0.1);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251, 191, 36, 0.1);
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.dm-bg-grid {
+  background-image:
+    linear-gradient(var(--border-0) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-0) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.dm-card {
+  background: var(--surf-1);
+  border: 1px solid var(--border-1);
+  border-radius: 10px;
+}
+
+.dm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--txt-2);
+  background: var(--surf-2);
+  border: 1px solid var(--border-1);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.dm-btn:hover:not(:disabled) {
+  color: var(--txt-1);
+  border-color: var(--border-1);
+  background: var(--surf-2);
+  filter: brightness(1.2);
+}
+.dm-btn:disabled {
+  cursor: default;
+}
+.dm-btn-cyan {
+  color: #0a0a0a;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+.dm-btn-cyan:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.dm-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--txt-1);
+  background: var(--surf-0);
+  border: 1px solid var(--border-1);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.dm-input::placeholder {
+  color: var(--txt-3);
+}
+.dm-input:focus {
+  border-color: var(--cyan);
+}
+.dm-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dm-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.dm-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--txt-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.dm-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 640px) {
+  .dm-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fade-up {
+  animation: slide-up 0.4s ease-out;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
