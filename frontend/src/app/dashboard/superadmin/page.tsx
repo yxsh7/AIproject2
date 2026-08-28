@@ -33,6 +33,8 @@ export default function SuperadminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterOrgId, setFilterOrgId] = useState<number | null>(null);
+  const [pendingOrgId, setPendingOrgId] = useState<number | null>(null);
+  const [pendingUserId, setPendingUserId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -58,26 +60,40 @@ export default function SuperadminDashboardPage() {
   };
 
   const toggleOrg = async (org: AdminOrganization) => {
+    if (org.is_active && !window.confirm(`Suspend ${org.name}? Everyone in this organization will be locked out immediately.`)) {
+      return;
+    }
+    setPendingOrgId(org.id);
     try {
       const res = await adminAPI.updateOrganization(org.id, { is_active: !org.is_active });
       setOrgs(prev => prev.map(o => (o.id === org.id ? res.data : o)));
       addToast(`${org.name} ${res.data.is_active ? 'reactivated' : 'suspended'}`, 'success');
     } catch (err: any) {
       addToast(err.response?.data?.detail || 'Failed to update organization', 'error');
+    } finally {
+      setPendingOrgId(null);
     }
   };
 
   const toggleUser = async (u: AdminUser) => {
+    if (u.is_active && !window.confirm(`Deactivate ${u.full_name} (${u.email})? They will be logged out immediately.`)) {
+      return;
+    }
+    setPendingUserId(u.id);
     try {
       const res = await adminAPI.updateUser(u.id, { is_active: !u.is_active });
       setUsers(prev => prev.map(x => (x.id === u.id ? res.data : x)));
       addToast(`${u.email} ${res.data.is_active ? 'reactivated' : 'deactivated'}`, 'success');
     } catch (err: any) {
       addToast(err.response?.data?.detail || 'Failed to update user', 'error');
+    } finally {
+      setPendingUserId(null);
     }
   };
 
   const visibleUsers = filterOrgId ? users.filter(u => u.organization_id === filterOrgId) : users;
+  const suspendedOrgCount = orgs.filter(o => !o.is_active).length;
+  const suspendedUserCount = users.filter(u => !u.is_active).length;
 
   if (loading) {
     return (
@@ -120,6 +136,24 @@ export default function SuperadminDashboardPage() {
           </div>
         )}
 
+        {/* KPI row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
+          {[
+            { label: 'Organizations', value: String(orgs.length), unit: 'total', color: 'var(--txt-1)' },
+            { label: 'Suspended Orgs', value: String(suspendedOrgCount), unit: 'orgs', color: suspendedOrgCount > 0 ? 'var(--red)' : 'var(--txt-1)' },
+            { label: 'Users', value: String(users.length), unit: 'total', color: 'var(--txt-1)' },
+            { label: 'Suspended Users', value: String(suspendedUserCount), unit: 'users', color: suspendedUserCount > 0 ? 'var(--red)' : 'var(--txt-1)' },
+          ].map(kpi => (
+            <div key={kpi.label} className="dm-card fade-up" style={{ padding: '16px 18px' }}>
+              <div className="dm-label">{kpi.label}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                <span className="mono" style={{ fontSize: 26, fontWeight: 700, color: kpi.color, lineHeight: 1 }}>{kpi.value}</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--txt-3)' }}>{kpi.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* Organizations */}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt-1)' }}>Organizations</h2>
@@ -150,8 +184,13 @@ export default function SuperadminDashboardPage() {
                   <td style={{ padding: '10px 14px', color: 'var(--txt-2)' }}>{org.developer_count}</td>
                   <td style={{ padding: '10px 14px' }}><StatusTag active={org.is_active} /></td>
                   <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                    <button className="dm-btn" onClick={() => toggleOrg(org)} style={{ fontSize: 11 }}>
-                      {org.is_active ? 'Suspend' : 'Reactivate'}
+                    <button
+                      className="dm-btn"
+                      onClick={() => toggleOrg(org)}
+                      disabled={pendingOrgId === org.id}
+                      style={{ fontSize: 11, opacity: pendingOrgId === org.id ? 0.5 : 1 }}
+                    >
+                      {pendingOrgId === org.id ? '…' : org.is_active ? 'Suspend' : 'Reactivate'}
                     </button>
                   </td>
                 </tr>
@@ -198,8 +237,13 @@ export default function SuperadminDashboardPage() {
                   <td style={{ padding: '10px 14px', color: 'var(--txt-2)', textTransform: 'capitalize' as const }}>{u.role}</td>
                   <td style={{ padding: '10px 14px' }}><StatusTag active={u.is_active} /></td>
                   <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                    <button className="dm-btn" onClick={() => toggleUser(u)} style={{ fontSize: 11 }}>
-                      {u.is_active ? 'Deactivate' : 'Reactivate'}
+                    <button
+                      className="dm-btn"
+                      onClick={() => toggleUser(u)}
+                      disabled={pendingUserId === u.id}
+                      style={{ fontSize: 11, opacity: pendingUserId === u.id ? 0.5 : 1 }}
+                    >
+                      {pendingUserId === u.id ? '…' : u.is_active ? 'Deactivate' : 'Reactivate'}
                     </button>
                   </td>
                 </tr>

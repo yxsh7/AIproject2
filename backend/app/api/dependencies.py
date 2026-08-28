@@ -63,12 +63,18 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
         HTTPException: If user is inactive, or their organization has been suspended
     """
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=400,
+            detail="This account has been deactivated. Contact your organization admin for access.",
+        )
     if (
         current_user.organization is not None
         and not current_user.organization.is_active
     ):
-        raise HTTPException(status_code=403, detail="Organization has been suspended")
+        raise HTTPException(
+            status_code=403,
+            detail="Your organization's access has been suspended. Contact your admin for details.",
+        )
     return current_user
 
 

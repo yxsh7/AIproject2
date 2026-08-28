@@ -14,6 +14,7 @@ export default function RegisterPage() {
   });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -139,14 +140,24 @@ export default function RegisterPage() {
           )}
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Password</label>
-            <input className="dm-input" type="password" name="password" value={formData.password} onChange={handleChange} placeholder="At least 8 characters" required disabled={isLoading} />
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ fontSize: 11, color: 'var(--txt-3)' }}>Password</label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                tabIndex={-1}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--txt-3)', padding: 0 }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <input className="dm-input" type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} placeholder="At least 8 characters" required disabled={isLoading} />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Confirm Password</label>
             <input
-              className="dm-input" type="password" name="confirmPassword"
+              className="dm-input" type={showPassword ? 'text' : 'password'} name="confirmPassword"
               value={confirmPassword}
               onChange={e => { setConfirmPassword(e.target.value); setLocalError(null); clearError(); }}
               placeholder="Re-enter password" required disabled={isLoading}
