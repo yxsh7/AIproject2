@@ -1,13 +1,39 @@
 """Security utilities for authentication and authorization"""
+import base64
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _get_fernet() -> Fernet:
+    """Derive a valid Fernet key from the configured ENCRYPTION_KEY setting,
+    regardless of its raw format (it doesn't need to already be 32 url-safe
+    base64 bytes — most values in .env won't be)."""
+    key_bytes = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key_bytes))
+
+
+def encrypt_secret(value: str) -> str:
+    """Encrypt a secret value (e.g. an integration access token) for storage."""
+    return _get_fernet().encrypt(value.encode()).decode()
+
+
+def decrypt_secret(value: str) -> str:
+    """Decrypt a secret value. Falls back to returning it unchanged if it
+    isn't a valid Fernet token — covers integration rows written before
+    encryption was added, so they keep working until re-saved."""
+    try:
+        return _get_fernet().decrypt(value.encode()).decode()
+    except (InvalidToken, ValueError):
+        return value
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

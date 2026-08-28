@@ -1,5 +1,5 @@
 """Organization model"""
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -15,6 +15,7 @@ class Organization(Base):
     name = Column(String, nullable=False, index=True)
     slug = Column(String, unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
     # Integration identifiers
     github_org = Column(String, nullable=True, index=True)
@@ -27,6 +28,7 @@ class Organization(Base):
     developer_profiles = relationship("DeveloperProfile", back_populates="organization")
     integrations = relationship("IntegrationConfig", back_populates="organization")
     insights = relationship("AIInsight", back_populates="organization")
+    invites = relationship("OrganizationInvite", back_populates="organization")
 
     def __repr__(self):
         return f"<Organization {self.name}>"

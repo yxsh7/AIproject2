@@ -109,6 +109,7 @@ class ProductivityScoringService:
 
         return ProductivityScore(
             developer_id=developer.id,
+            organization_id=developer.organization_id,
             period_start=start_date,
             period_end=end_date,
             period_type="monthly",
@@ -355,6 +356,7 @@ class ProductivityScoringService:
     def calculate_team_scores(
         self,
         team: str,
+        organization_id: int,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> Dict:
@@ -363,16 +365,22 @@ class ProductivityScoringService:
 
         Args:
             team: Team name
+            organization_id: Organization the team belongs to (team names are not
+                unique across organizations, so this is required to avoid blending
+                two different orgs' "Backend" teams together)
             start_date: Start of evaluation period
             end_date: End of evaluation period
 
         Returns:
             Dict with team aggregate scores and individual scores
         """
-        # Get all developers in team
+        # Get all developers in team, scoped to this organization
         developers = (
             self.db.query(DeveloperProfile)
-            .filter(DeveloperProfile.team == team)
+            .filter(
+                DeveloperProfile.team == team,
+                DeveloperProfile.organization_id == organization_id,
+            )
             .all()
         )
 

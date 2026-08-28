@@ -41,6 +41,7 @@ class WorkActivity(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Activity metadata
     activity_date = Column(Date, nullable=False, index=True)

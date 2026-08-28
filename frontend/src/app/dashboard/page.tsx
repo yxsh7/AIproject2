@@ -19,7 +19,7 @@ import { BarChart, DonutChart, ProgressRing } from '../../components/ui/charts';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isInitializing } = useAuthStore();
   const { addToast } = useToast();
 
   const [overview, setOverview] = useState<DeveloperAnalyticsOverview | null>(null);
@@ -40,6 +40,7 @@ export default function DashboardPage() {
   // GitHub form
   const [githubToken, setGithubToken] = useState('');
   const [githubOrg, setGithubOrg] = useState('');
+  const [githubRepos, setGithubRepos] = useState('');
 
   // Jira form
   const [jiraUrl, setJiraUrl] = useState('');
@@ -61,13 +62,14 @@ export default function DashboardPage() {
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (isInitializing) return;
     if (!user) {
       router.push('/login');
       return;
     }
 
     fetchData();
-  }, [user]);
+  }, [user, isInitializing]);
 
   // Real-time polling for sync status updates
   useEffect(() => {
@@ -228,13 +230,19 @@ export default function DashboardPage() {
     setIntegrationError(null);
 
     try {
+      const repos = githubRepos
+        .split(',')
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0);
       await integrationsAPI.configureGitHub({
         organization_name: githubOrg || 'personal',
         access_token: githubToken,
+        repos: repos.length > 0 ? repos : undefined,
       });
       setShowAddModal(null);
       setGithubToken('');
       setGithubOrg('');
+      setGithubRepos('');
       addToast('GitHub connected successfully!', 'success');
       fetchData();
     } catch (error: any) {
@@ -992,6 +1000,23 @@ export default function DashboardPage() {
                   placeholder="Leave empty for personal account"
                   className="bg-slate-900/50 border-slate-700 text-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Repos to sync (optional)
+                </label>
+                <Input
+                  type="text"
+                  value={githubRepos}
+                  onChange={(e) => setGithubRepos(e.target.value)}
+                  placeholder="owner/repo, owner/other-repo"
+                  className="bg-slate-900/50 border-slate-700 text-white"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Comma-separated. Leave empty to scan every repo the token can access —
+                  slower, and pulls in unrelated repos for a personal-account token.
+                </p>
               </div>
 
               {integrationError && (

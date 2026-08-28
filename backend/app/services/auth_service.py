@@ -40,8 +40,8 @@ class AuthService:
         email: str,
         password: str,
         full_name: str,
+        organization_id: int,
         role: str = "developer",
-        organization_id: int = 1,
     ) -> User:
         """
         Create a new user
@@ -51,8 +51,10 @@ class AuthService:
             email: User email
             password: Plain text password
             full_name: User's full name
+            organization_id: Organization the user belongs to (always required —
+                the caller must resolve this explicitly, e.g. via a new org or
+                a redeemed invite code)
             role: User role (admin, manager, developer)
-            organization_id: Organization ID (defaults to 1)
 
         Returns:
             Created User object

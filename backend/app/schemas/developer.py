@@ -8,7 +8,6 @@ class DeveloperProfileCreate(BaseModel):
     """Schema for creating a developer profile"""
 
     user_id: int
-    organization_id: int
     role_level: str = Field(..., description="Role level: intern, junior, mid, senior, staff, principal")
     team: Optional[str] = None
     job_title: Optional[str] = None

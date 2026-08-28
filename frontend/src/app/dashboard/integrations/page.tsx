@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function IntegrationsPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, isInitializing } = useAuthStore();
 
   const [integrations,  setIntegrations]  = useState<Integration[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -39,9 +39,10 @@ export default function IntegrationsPage() {
   const [showJiraForm,   setShowJiraForm]   = useState(false);
 
   useEffect(() => {
+    if (isInitializing) return;
     if (!user) { router.push('/login'); return; }
     fetchIntegrations();
-  }, [user]);
+  }, [user, isInitializing]);
 
   const fetchIntegrations = async () => {
     try {

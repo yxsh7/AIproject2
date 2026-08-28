@@ -16,6 +16,7 @@ class ProductivityScore(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     developer_id = Column(Integer, ForeignKey("developer_profiles.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Time period
     period_start = Column(Date, nullable=False, index=True)

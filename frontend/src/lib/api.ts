@@ -86,9 +86,28 @@ export const analyticsAPI = {
     api.post(`/api/analytics/developers/${id}/analyze`, null, { params: { limit } }),
 };
 
+export const organizationsAPI = {
+  me: () => api.get('/api/organizations/me'),
+  listInvites: () => api.get('/api/organizations/invites'),
+  createInvite: (data: { role: string; max_uses?: number; expires_in_days?: number }) =>
+    api.post('/api/organizations/invites', data),
+  revokeInvite: (id: number) => api.delete(`/api/organizations/invites/${id}`),
+};
+
+export const adminAPI = {
+  listOrganizations: () => api.get('/api/admin/organizations'),
+  getOrganization: (id: number) => api.get(`/api/admin/organizations/${id}`),
+  updateOrganization: (id: number, data: { is_active: boolean }) =>
+    api.patch(`/api/admin/organizations/${id}`, data),
+  listUsers: (organizationId?: number) =>
+    api.get('/api/admin/users', { params: organizationId ? { organization_id: organizationId } : undefined }),
+  updateUser: (id: number, data: { is_active: boolean }) =>
+    api.patch(`/api/admin/users/${id}`, data),
+};
+
 export const integrationsAPI = {
   list: () => api.get('/api/integrations'),
-  configureGitHub: (data: { organization_name: string; access_token: string }) =>
+  configureGitHub: (data: { organization_name: string; access_token: string; repos?: string[] }) =>
     api.post('/api/integrations/github', data),
   configureJira: (data: {
     workspace_url: string;

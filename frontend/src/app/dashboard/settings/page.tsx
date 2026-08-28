@@ -97,7 +97,7 @@ function TeamProfileRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isInitializing } = useAuthStore();
 
   const [activeTab,    setActiveTab]    = useState<'profile' | 'team'>('profile');
   const [toast,        setToast]        = useState<Toast>(null);
@@ -121,9 +121,10 @@ export default function SettingsPage() {
 
   // ── Fetch data ───────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (isInitializing) return;
     if (!user) { router.push('/login'); return; }
     fetchData();
-  }, [user]);
+  }, [user, isInitializing]);
 
   const fetchData = async () => {
     try {

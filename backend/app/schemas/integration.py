@@ -9,6 +9,15 @@ class GitHubIntegrationCreate(BaseModel):
 
     organization_name: str = Field(..., description="GitHub organization name")
     access_token: str = Field(..., description="GitHub personal access token or OAuth token")
+    repos: Optional[list[str]] = Field(
+        default=None,
+        description=(
+            "Limit sync to these repos (full 'owner/repo' names). Omit to scan every "
+            "repo the token can access — fine for a real GitHub org, but slow and "
+            "over-broad for a personal-account token, since it pulls in unrelated "
+            "personal/other-employer repos too."
+        ),
+    )
 
 
 class JiraIntegrationCreate(BaseModel):

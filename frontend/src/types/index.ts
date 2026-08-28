@@ -8,7 +8,51 @@ export interface User {
   full_name: string;
   role: 'admin' | 'manager' | 'developer';
   is_active: boolean;
+  organization_id: number;
+  is_superadmin: boolean;
   created_at: string;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface OrganizationInvite {
+  id: number;
+  organization_id: number;
+  code: string;
+  role: string;
+  max_uses?: number | null;
+  used_count: number;
+  expires_at?: string | null;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface AdminOrganization {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  user_count: number;
+  developer_count: number;
+  created_at?: string;
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  is_superadmin: boolean;
+  organization_id: number;
+  organization_name: string;
+  created_at?: string;
 }
 
 export interface DeveloperProfile {
@@ -248,9 +292,13 @@ export interface LoginCredentials {
   password: string;
 }
 
+export type RegisterMode = 'create_org' | 'join_org';
+
 export interface RegisterData {
   email: string;
   password: string;
   full_name: string;
-  role: UserRole;
+  mode: RegisterMode;
+  organization_name?: string;
+  invite_code?: string;
 }

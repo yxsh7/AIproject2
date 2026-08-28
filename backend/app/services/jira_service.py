@@ -11,6 +11,7 @@ from app.models import (
     JiraComment,
     IntegrationConfig,
 )
+from app.utils.security import decrypt_secret
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class JiraService:
         if not all([url, username, api_token]):
             raise ValueError("Jira configuration incomplete")
 
-        return cls(url=url, username=username, api_token=api_token)
+        return cls(url=url, username=username, api_token=decrypt_secret(api_token))
 
     def test_connection(self) -> bool:
         """

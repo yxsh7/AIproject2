@@ -16,6 +16,7 @@ except ImportError:
 
 from app.models import DeveloperProfile, IntegrationConfig, IntegrationType
 from app.models.slack_activity import SlackMessage, SlackReaction
+from app.utils.security import decrypt_secret
 
 
 class SlackService:
@@ -32,7 +33,7 @@ class SlackService:
         token = config.config.get("bot_token")
         if not token:
             raise ValueError("Slack bot token not found in config")
-        return cls(bot_token=token)
+        return cls(bot_token=decrypt_secret(token))
 
     def test_connection(self) -> bool:
         try:

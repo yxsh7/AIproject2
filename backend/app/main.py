@@ -7,7 +7,7 @@ from app.config import settings
 from app.database import init_db
 
 # Import routers
-from app.api import auth, developers, integrations, analytics
+from app.api import auth, developers, integrations, analytics, organizations, admin
 
 
 @asynccontextmanager
@@ -69,6 +69,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(developers.router, prefix="/api/developers", tags=["Developers"])
 app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(organizations.router, prefix="/api/organizations", tags=["Organizations"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 
 if __name__ == "__main__":

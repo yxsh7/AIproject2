@@ -30,6 +30,7 @@ from app.database import SessionLocal, Base, engine
 from app.models import (
     User,
     Organization,
+    OrganizationInvite,
     DeveloperProfile,
     GitCommit,
     JiraTicket,
@@ -57,19 +58,19 @@ def _weighted_score(low: int, high: int) -> int:
     return random.randint(low, high)
 
 
-def seed_organization(db) -> Organization:
-    """Create or retrieve demo organization."""
-    org = db.query(Organization).filter(Organization.slug == "demo-org").first()
+def seed_organization(db, name: str, slug: str, description: str = "", github_org: str = None, jira_workspace: str = None) -> Organization:
+    """Create or retrieve an organization by slug."""
+    org = db.query(Organization).filter(Organization.slug == slug).first()
     if org:
         print(f"  Organization already exists: {org.name}")
         return org
 
     org = Organization(
-        name="Demo Engineering",
-        slug="demo-org",
-        description="Demo organization for DevMetrics AI",
-        github_org="demo-engineering",
-        jira_workspace="demo.atlassian.net",
+        name=name,
+        slug=slug,
+        description=description,
+        github_org=github_org,
+        jira_workspace=jira_workspace,
     )
     db.add(org)
     db.commit()
@@ -78,7 +79,7 @@ def seed_organization(db) -> Organization:
     return org
 
 
-def seed_user(db, email: str, password: str, full_name: str, role: str) -> User:
+def seed_user(db, email: str, password: str, full_name: str, role: str, organization_id: int, is_superadmin: bool = False) -> User:
     """Create or retrieve a user."""
     user = db.query(User).filter(User.email == email).first()
     if user:
@@ -90,13 +91,36 @@ def seed_user(db, email: str, password: str, full_name: str, role: str) -> User:
         hashed_password=get_password_hash(password),
         full_name=full_name,
         role=role,
-        is_active=1,
+        is_active=True,
+        organization_id=organization_id,
+        is_superadmin=is_superadmin,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     print(f"  Created user: {email} ({role})")
     return user
+
+
+def seed_invite(db, org: Organization, created_by: User, role: str, code: str) -> OrganizationInvite:
+    """Create or retrieve a fixed-code invite for an organization (so the join flow
+    is testable immediately without first logging in as an org admin)."""
+    invite = db.query(OrganizationInvite).filter(OrganizationInvite.code == code).first()
+    if invite:
+        print(f"  Invite already exists: {code}")
+        return invite
+
+    invite = OrganizationInvite(
+        organization_id=org.id,
+        code=code,
+        role=role,
+        created_by=created_by.id,
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    print(f"  Created invite: {code} ({role}, org {org.name})")
+    return invite
 
 
 def seed_developer_profile(
@@ -300,6 +324,7 @@ def seed_work_activities(db, developer: DeveloperProfile, count: int = 10):
 
         activity = WorkActivity(
             developer_id=developer.id,
+            organization_id=developer.organization_id,
             activity_date=activity_date,
             work_type=work_type,
             complexity_score=_weighted_score(*complexity_range),
@@ -354,6 +379,7 @@ def seed_productivity_scores(db, developer: DeveloperProfile, months: int = 3):
 
         score = ProductivityScore(
             developer_id=developer.id,
+            organization_id=developer.organization_id,
             period_start=period_start,
             period_end=period_end,
             period_type="monthly",
@@ -479,151 +505,146 @@ def seed_ai_insights(db, developer: DeveloperProfile, org: Organization, count: 
     print(f"    Created {to_create} AI insights for developer {developer.id}")
 
 
+def seed_full_org_roster(db, org: Organization, accounts: list):
+    """Seed users + developer profiles + activity data for one organization.
+
+    `accounts` is a list of dicts: {email, password, full_name, role, role_level,
+    team, github_username, jira_username, job_title, seed_activity}. Users with
+    role in (admin, manager) still get a developer profile if role_level is set,
+    so they can view their own dashboard; seed_activity controls whether commits/
+    tickets/scores/insights are generated for them.
+    """
+    devs = []
+    for acct in accounts:
+        user = seed_user(
+            db,
+            email=acct["email"],
+            password=acct["password"],
+            full_name=acct["full_name"],
+            role=acct["role"],
+            organization_id=org.id,
+        )
+        if acct.get("role_level"):
+            dev = seed_developer_profile(
+                db, user, org,
+                role_level=acct["role_level"],
+                team=acct["team"],
+                github_username=acct["github_username"],
+                jira_username=acct["jira_username"],
+                job_title=acct["job_title"],
+            )
+            if acct.get("seed_activity", True):
+                devs.append(dev)
+
+    for dev in devs:
+        seed_git_commits(db, dev, count=random.randint(7, 12))
+        seed_jira_tickets(db, dev, count=random.randint(7, 12))
+        seed_work_activities(db, dev, count=random.randint(15, 25))
+        seed_productivity_scores(db, dev, months=3)
+        seed_ai_insights(db, dev, org, count=3)
+
+    return devs
+
+
 def main():
     print("\n" + "=" * 60)
     print("DevMetrics AI - Database Seed Script")
     print("=" * 60)
 
     # Initialize database tables
-    print("\n[1/7] Initializing database tables...")
+    print("\n[1/5] Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     print("  Database tables ready.")
 
     db = SessionLocal()
 
     try:
-        # Step 1: Organization
-        print("\n[2/7] Seeding organization...")
-        org = seed_organization(db)
+        # Step 1: Organizations — including a reserved platform-admin org to hold
+        # the superadmin account, and two real tenant orgs that deliberately share
+        # a team name ("backend") to prove cross-org team scoping doesn't blend data.
+        print("\n[2/5] Seeding organizations...")
+        platform_org = seed_organization(
+            db, name="DevMetrics Platform", slug="platform-admin",
+            description="Reserved organization for platform superadmin accounts",
+        )
+        org_a = seed_organization(
+            db, name="Demo Engineering", slug="demo-org",
+            description="Demo organization for DevMetrics AI",
+            github_org="demo-engineering", jira_workspace="demo.atlassian.net",
+        )
+        org_b = seed_organization(
+            db, name="Acme Robotics", slug="acme-robotics",
+            description="Second demo organization, used to verify tenant isolation",
+            github_org="acme-robotics", jira_workspace="acme.atlassian.net",
+        )
 
-        # Step 2: Users
-        print("\n[3/7] Seeding users...")
-
-        admin_user = seed_user(
+        # Step 2: Superadmin (platform-level, not tied to either tenant's data)
+        print("\n[3/5] Seeding superadmin...")
+        superadmin = seed_user(
             db,
-            email="admin@devmetrics.ai",
-            password="admin123",
-            full_name="Admin User",
+            email="superadmin@devmetrics.ai",
+            password="Super123!",
+            full_name="Platform Admin",
             role="admin",
+            organization_id=platform_org.id,
+            is_superadmin=True,
         )
 
-        manager_user = seed_user(
-            db,
-            email="manager@devmetrics.ai",
-            password="Manager123!",
-            full_name="Sarah Manager",
-            role="manager",
-        )
+        # Step 3: Org A roster (Demo Engineering)
+        print("\n[4/5] Seeding Demo Engineering (org A) roster...")
+        admin_user = seed_user(db, "admin@devmetrics.ai", "admin123", "Admin User", "admin", org_a.id)
+        seed_full_org_roster(db, org_a, [
+            {"email": "manager@devmetrics.ai", "password": "Manager123!", "full_name": "Sarah Manager",
+             "role": "manager", "role_level": RoleLevel.SENIOR.value, "team": "backend",
+             "github_username": "sarah-manager", "jira_username": "sarah.manager", "job_title": "Engineering Manager"},
+            {"email": "demo@devmetrics.ai", "password": "demo", "full_name": "Demo User",
+             "role": "manager", "role_level": None, "team": None,
+             "github_username": None, "jira_username": None, "job_title": None},
+            {"email": "junior@devmetrics.ai", "password": "Dev123!", "full_name": "Alex Junior",
+             "role": "developer", "role_level": RoleLevel.JUNIOR.value, "team": "backend",
+             "github_username": "alex-junior", "jira_username": "alex.junior", "job_title": "Junior Software Engineer"},
+            {"email": "dev@devmetrics.ai", "password": "Dev123!", "full_name": "Jordan Developer",
+             "role": "developer", "role_level": RoleLevel.MID.value, "team": "backend",
+             "github_username": "jordan-dev", "jira_username": "jordan.developer", "job_title": "Software Engineer"},
+            {"email": "senior@devmetrics.ai", "password": "Dev123!", "full_name": "Casey Senior",
+             "role": "developer", "role_level": RoleLevel.SENIOR.value, "team": "backend",
+             "github_username": "casey-senior", "jira_username": "casey.senior", "job_title": "Senior Software Engineer"},
+        ])
+        seed_invite(db, org_a, admin_user, role="developer", code="DEMO-DEV-INVITE")
+        seed_invite(db, org_a, admin_user, role="manager", code="DEMO-MGR-INVITE")
 
-        seed_user(
-            db,
-            email="demo@devmetrics.ai",
-            password="demo",
-            full_name="Demo User",
-            role="manager",
-        )
-
-        junior_user = seed_user(
-            db,
-            email="junior@devmetrics.ai",
-            password="Dev123!",
-            full_name="Alex Junior",
-            role="developer",
-        )
-
-        mid_user = seed_user(
-            db,
-            email="dev@devmetrics.ai",
-            password="Dev123!",
-            full_name="Jordan Developer",
-            role="developer",
-        )
-
-        senior_user = seed_user(
-            db,
-            email="senior@devmetrics.ai",
-            password="Dev123!",
-            full_name="Casey Senior",
-            role="developer",
-        )
-
-        # Step 3: Developer profiles
-        print("\n[4/7] Seeding developer profiles...")
-
-        junior_dev = seed_developer_profile(
-            db, junior_user, org,
-            role_level=RoleLevel.JUNIOR.value,
-            team="backend",
-            github_username="alex-junior",
-            jira_username="alex.junior",
-            job_title="Junior Software Engineer",
-        )
-
-        mid_dev = seed_developer_profile(
-            db, mid_user, org,
-            role_level=RoleLevel.MID.value,
-            team="backend",
-            github_username="jordan-dev",
-            jira_username="jordan.developer",
-            job_title="Software Engineer",
-        )
-
-        senior_dev = seed_developer_profile(
-            db, senior_user, org,
-            role_level=RoleLevel.SENIOR.value,
-            team="backend",
-            github_username="casey-senior",
-            jira_username="casey.senior",
-            job_title="Senior Software Engineer",
-        )
-
-        # Also create a developer profile for manager (optional, so they can view their own dashboard)
-        manager_dev = seed_developer_profile(
-            db, manager_user, org,
-            role_level=RoleLevel.SENIOR.value,
-            team="backend",
-            github_username="sarah-manager",
-            jira_username="sarah.manager",
-            job_title="Engineering Manager",
-        )
-
-        all_devs = [junior_dev, mid_dev, senior_dev, manager_dev]
-
-        # Step 4: Git commits
-        print("\n[5/7] Seeding git commits...")
-        for dev in all_devs:
-            seed_git_commits(db, dev, count=random.randint(7, 12))
-
-        # Step 5: Jira tickets
-        print("\n    Seeding Jira tickets...")
-        for dev in all_devs:
-            seed_jira_tickets(db, dev, count=random.randint(7, 12))
-
-        # Step 6: Work activities
-        print("\n[6/7] Seeding work activities...")
-        for dev in all_devs:
-            seed_work_activities(db, dev, count=random.randint(15, 25))
-
-        # Step 7: Productivity scores
-        print("\n    Seeding productivity scores...")
-        for dev in all_devs:
-            seed_productivity_scores(db, dev, months=3)
-
-        # Step 8: AI Insights
-        print("\n[7/7] Seeding AI insights...")
-        for dev in all_devs:
-            seed_ai_insights(db, dev, org, count=3)
+        # Step 4: Org B roster (Acme Robotics) — same "backend" team name as org A,
+        # on purpose, to verify team-scoped analytics never blend across tenants.
+        print("\n[5/5] Seeding Acme Robotics (org B) roster...")
+        acme_admin = seed_user(db, "acme-admin@devmetrics.ai", "Acme123!", "Acme Admin", "admin", org_b.id)
+        seed_full_org_roster(db, org_b, [
+            {"email": "acme-manager@devmetrics.ai", "password": "Acme123!", "full_name": "Riley Manager",
+             "role": "manager", "role_level": RoleLevel.SENIOR.value, "team": "backend",
+             "github_username": "riley-manager", "jira_username": "riley.manager", "job_title": "Engineering Manager"},
+            {"email": "acme-dev@devmetrics.ai", "password": "Acme123!", "full_name": "Morgan Developer",
+             "role": "developer", "role_level": RoleLevel.MID.value, "team": "backend",
+             "github_username": "morgan-dev", "jira_username": "morgan.dev", "job_title": "Software Engineer"},
+        ])
+        seed_invite(db, org_b, acme_admin, role="developer", code="ACME-DEV-INVITE")
 
         print("\n" + "=" * 60)
         print("Seeding complete!")
         print("=" * 60)
-        print("\nDemo accounts:")
+        print("\nSuperadmin account:")
+        print("  superadmin@devmetrics.ai / Super123!")
+        print("\nOrg A — Demo Engineering (demo-org):")
         print("  Demo:     demo@devmetrics.ai      / demo")
         print("  Admin:    admin@devmetrics.ai     / admin123")
         print("  Manager:  manager@devmetrics.ai   / Manager123!")
         print("  Senior:   senior@devmetrics.ai    / Dev123!")
         print("  Mid:      dev@devmetrics.ai        / Dev123!")
         print("  Junior:   junior@devmetrics.ai    / Dev123!")
+        print("  Invite codes: DEMO-DEV-INVITE (developer), DEMO-MGR-INVITE (manager)")
+        print("\nOrg B — Acme Robotics (acme-robotics):")
+        print("  Admin:    acme-admin@devmetrics.ai   / Acme123!")
+        print("  Manager:  acme-manager@devmetrics.ai / Acme123!")
+        print("  Dev:      acme-dev@devmetrics.ai     / Acme123!")
+        print("  Invite code: ACME-DEV-INVITE (developer)")
         print("\nStart the backend: uvicorn app.main:app --reload")
         print("Start the frontend: cd ../frontend && npm run dev")
         print("=" * 60 + "\n")

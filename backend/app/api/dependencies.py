@@ -59,10 +59,49 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
         Current active User
 
     Raises:
-        HTTPException: If user is inactive
+        HTTPException: If user is inactive, or their organization has been suspended
     """
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if current_user.organization is not None and not current_user.organization.is_active:
+        raise HTTPException(status_code=403, detail="Organization has been suspended")
+    return current_user
+
+
+def get_current_org_id(current_user: User = Depends(get_current_active_user)) -> int:
+    """
+    Dependency returning the current user's organization_id, for scoping queries.
+
+    Args:
+        current_user: Current active user
+
+    Returns:
+        The user's organization_id
+
+    Raises:
+        HTTPException: If the user has no organization assigned (should not happen
+        once organization_id is NOT NULL, but guards against orphaned rows)
+    """
+    if current_user.organization_id is None:
+        raise HTTPException(status_code=403, detail="User is not assigned to an organization")
+    return current_user.organization_id
+
+
+def require_superadmin(current_user: User = Depends(get_current_active_user)) -> User:
+    """
+    Dependency to require platform-level superadmin access.
+
+    Args:
+        current_user: Current active user
+
+    Returns:
+        Current user if they are a superadmin
+
+    Raises:
+        HTTPException: If user is not a superadmin
+    """
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Superadmin access required")
     return current_user
 
 

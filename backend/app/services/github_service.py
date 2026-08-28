@@ -13,6 +13,7 @@ from app.models import (
     IntegrationConfig,
     IntegrationType,
 )
+from app.utils.security import decrypt_secret
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class GitHubService:
         token = config.config.get("access_token")
         if not token:
             raise ValueError("GitHub access token not found in config")
-        return cls(access_token=token)
+        return cls(access_token=decrypt_secret(token))
 
     def test_connection(self) -> bool:
         """
@@ -87,21 +88,55 @@ class GitHubService:
             logger.error(f"Failed to fetch user {username}: {e}")
             return None
 
+    def _get_repos(self, org_name: Optional[str], repos: Optional[List[str]] = None) -> List:
+        """
+        Resolve the list of repos to scan.
+
+        If `repos` (a list of full 'owner/repo' names) is given, fetch exactly
+        those — this is the fast, scoped path and the one that should be used
+        whenever the caller knows which repos it cares about. Otherwise fall
+        back to listing every repo the token can access under the org (or the
+        user's own account if org access fails / no org is configured) — slow,
+        and for a personal-account token pulls in unrelated repos too, but kept
+        as the default so existing integrations without explicit repo scoping
+        keep working.
+        """
+        if repos:
+            resolved = []
+            for full_name in repos:
+                try:
+                    resolved.append(self.client.get_repo(full_name))
+                except GithubException as e:
+                    logger.error(f"Could not access configured repo {full_name}: {e}")
+            return resolved
+
+        if org_name:
+            try:
+                org = self.client.get_organization(org_name)
+                return list(org.get_repos())
+            except GithubException:
+                logger.info(f"Could not access org {org_name}, falling back to user repos")
+
+        user = self.client.get_user()
+        return list(user.get_repos(affiliation='owner,collaborator,organization_member'))
+
     def sync_commits_for_developer(
         self,
         db: Session,
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repos: Optional[List[str]] = None,
     ) -> int:
         """
-        Sync commits for a developer from all org repositories
+        Sync commits for a developer from org (or explicitly scoped) repositories
 
         Args:
             db: Database session
             developer: DeveloperProfile instance
             org_name: GitHub organization name
             days_back: Number of days to look back
+            repos: Optional list of full 'owner/repo' names to scope the scan to
 
         Returns:
             Number of commits synced
@@ -111,21 +146,7 @@ class GitHubService:
             return 0
 
         try:
-            # Handle both organization and personal accounts
-            if org_name:
-                try:
-                    org = self.client.get_organization(org_name)
-                    repos = list(org.get_repos())
-                except GithubException:
-                    # Fall back to user repos if org access fails
-                    logger.info(f"Could not access org {org_name}, falling back to user repos")
-                    user = self.client.get_user()
-                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-            else:
-                # Personal account - get ALL repos user has access to
-                user = self.client.get_user()
-                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-
+            repos = self._get_repos(org_name, repos)
             logger.info(f"Found {len(repos)} repositories to scan for commits")
 
             since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -187,6 +208,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repos: Optional[List[str]] = None,
     ) -> int:
         """
         Sync pull requests created by a developer
@@ -196,6 +218,7 @@ class GitHubService:
             developer: DeveloperProfile instance
             org_name: GitHub organization name
             days_back: Number of days to look back
+            repos: Optional list of full 'owner/repo' names to scope the scan to
 
         Returns:
             Number of PRs synced
@@ -205,20 +228,7 @@ class GitHubService:
             return 0
 
         try:
-            # Handle both organization and personal accounts
-            if org_name:
-                try:
-                    org = self.client.get_organization(org_name)
-                    repos = list(org.get_repos())
-                except GithubException:
-                    logger.info(f"Could not access org {org_name}, falling back to user repos")
-                    user = self.client.get_user()
-                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-            else:
-                # Personal account - get ALL repos user has access to
-                user = self.client.get_user()
-                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-
+            repos = self._get_repos(org_name, repos)
             logger.info(f"Found {len(repos)} repositories to scan for PRs")
 
             since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -297,6 +307,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repos: Optional[List[str]] = None,
     ) -> int:
         """
         Sync code reviews given by a developer
@@ -306,6 +317,7 @@ class GitHubService:
             developer: DeveloperProfile instance
             org_name: GitHub organization name
             days_back: Number of days to look back
+            repos: Optional list of full 'owner/repo' names to scope the scan to
 
         Returns:
             Number of reviews synced
@@ -315,20 +327,7 @@ class GitHubService:
             return 0
 
         try:
-            # Handle both organization and personal accounts
-            if org_name:
-                try:
-                    org = self.client.get_organization(org_name)
-                    repos = list(org.get_repos())
-                except GithubException:
-                    logger.info(f"Could not access org {org_name}, falling back to user repos")
-                    user = self.client.get_user()
-                    repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-            else:
-                # Personal account - get ALL repos user has access to
-                user = self.client.get_user()
-                repos = list(user.get_repos(affiliation='owner,collaborator,organization_member'))
-
+            repos = self._get_repos(org_name, repos)
             logger.info(f"Found {len(repos)} repositories to scan for code reviews")
 
             since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -408,6 +407,7 @@ class GitHubService:
         developer: DeveloperProfile,
         org_name: str,
         days_back: int = 30,
+        repos: Optional[List[str]] = None,
     ) -> Dict[str, int]:
         """
         Sync all GitHub activity for a developer
@@ -417,6 +417,7 @@ class GitHubService:
             developer: DeveloperProfile instance
             org_name: GitHub organization name
             days_back: Number of days to look back
+            repos: Optional list of full 'owner/repo' names to scope the scan to
 
         Returns:
             Dict with counts of synced items
@@ -426,13 +427,13 @@ class GitHubService:
         )
 
         commits_count = self.sync_commits_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repos
         )
         prs_count = self.sync_pull_requests_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repos
         )
         reviews_count = self.sync_code_reviews_for_developer(
-            db, developer, org_name, days_back
+            db, developer, org_name, days_back, repos
         )
 
         return {
@@ -506,17 +507,7 @@ class GitHubService:
             List of repository info dicts
         """
         try:
-            if org_name:
-                try:
-                    org = self.client.get_organization(org_name)
-                    repos = org.get_repos()
-                except GithubException:
-                    user = self.client.get_user()
-                    repos = user.get_repos(affiliation='owner,collaborator,organization_member')
-            else:
-                user = self.client.get_user()
-                repos = user.get_repos(affiliation='owner,collaborator,organization_member')
-
+            repos = self._get_repos(org_name)
             return [
                 {
                     "name": repo.name,

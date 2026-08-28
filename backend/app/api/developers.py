@@ -11,7 +11,7 @@ from app.schemas.developer import (
     DeveloperWithUser,
 )
 from app.models import DeveloperProfile, User
-from app.api.dependencies import get_current_active_user, require_manager_or_admin
+from app.api.dependencies import get_current_active_user, require_manager_or_admin, get_current_org_id
 
 router = APIRouter()
 
@@ -23,6 +23,7 @@ def create_developer_profile(
     profile_data: DeveloperProfileCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager_or_admin),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Create a new developer profile (Manager/Admin only)
@@ -36,11 +37,11 @@ def create_developer_profile(
         Created developer profile
 
     Raises:
-        HTTPException: If user doesn't exist or already has a profile
+        HTTPException: If user doesn't exist, belongs to another org, or already has a profile
     """
-    # Check if user exists
+    # Check if user exists and belongs to the caller's organization
     user = db.query(User).filter(User.id == profile_data.user_id).first()
-    if not user:
+    if not user or user.organization_id != org_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
@@ -65,8 +66,9 @@ def create_developer_profile(
             detail=f"Invalid role_level. Must be one of: {', '.join(valid_roles)}",
         )
 
-    # Create developer profile
-    developer_profile = DeveloperProfile(**profile_data.dict())
+    # Create developer profile — organization_id always comes from the caller's own
+    # org, never trusted from the request body
+    developer_profile = DeveloperProfile(**profile_data.dict(), organization_id=org_id)
     db.add(developer_profile)
     db.commit()
     db.refresh(developer_profile)
@@ -82,9 +84,10 @@ def list_developers(
     limit: int = Query(100, ge=1, le=1000, description="Max number of records to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
-    List all developer profiles
+    List all developer profiles in the caller's organization
 
     Args:
         team: Optional filter by team
@@ -97,8 +100,8 @@ def list_developers(
     Returns:
         List of developer profiles with user info
     """
-    # Build query
-    query = db.query(DeveloperProfile).join(User)
+    # Build query, scoped to the caller's organization
+    query = db.query(DeveloperProfile).join(User).filter(DeveloperProfile.organization_id == org_id)
 
     # Apply filters
     if team:
@@ -135,6 +138,7 @@ def get_developer(
     developer_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get a specific developer profile
@@ -148,13 +152,13 @@ def get_developer(
         Developer profile
 
     Raises:
-        HTTPException: If developer not found or unauthorized
+        HTTPException: If developer not found, belongs to another org, or unauthorized
     """
     developer = (
         db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
     )
 
-    if not developer:
+    if not developer or developer.organization_id != org_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found"
         )
@@ -176,16 +180,18 @@ def update_developer(
     profile_update: DeveloperProfileUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Update a developer profile.
-    Developers can update their own profile; managers/admins can update any profile.
+    Developers can update their own profile; managers/admins can update any profile
+    within their own organization.
     """
     developer = (
         db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
     )
 
-    if not developer:
+    if not developer or developer.organization_id != org_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found"
         )
@@ -228,6 +234,7 @@ def delete_developer(
     developer_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager_or_admin),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Delete a developer profile (Manager/Admin only)
@@ -238,13 +245,13 @@ def delete_developer(
         current_user: Current authenticated user (manager or admin)
 
     Raises:
-        HTTPException: If developer not found
+        HTTPException: If developer not found or belongs to another org
     """
     developer = (
         db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
     )
 
-    if not developer:
+    if not developer or developer.organization_id != org_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found"
         )

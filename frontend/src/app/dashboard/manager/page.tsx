@@ -252,7 +252,7 @@ function DevDetailPanel({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ManagerDashboardPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, isInitializing } = useAuthStore();
 
   const [developers,   setDevelopers]   = useState<DeveloperWithUser[]>([]);
   const [teamData,     setTeamData]     = useState<TeamAnalytics | null>(null);
@@ -268,10 +268,11 @@ export default function ManagerDashboardPage() {
   const [panelLoading, setPanelLoading] = useState(false);
 
   useEffect(() => {
+    if (isInitializing) return;
     if (!user) { router.push('/login'); return; }
     if (user.role !== 'manager' && user.role !== 'admin') { router.push('/dashboard'); return; }
     fetchDevelopers();
-  }, [user]);
+  }, [user, isInitializing]);
 
   const fetchDevelopers = async () => {
     try {
@@ -368,6 +369,9 @@ export default function ManagerDashboardPage() {
           <span style={{ fontSize: 11, color: 'var(--txt-3)' }}>Team Overview</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
+          {user?.is_superadmin && (
+            <button className="dm-btn" onClick={() => router.push('/dashboard/superadmin')} style={{ fontSize: 11 }}>Platform Admin</button>
+          )}
           <button className="dm-btn" onClick={() => router.push('/dashboard/integrations')} style={{ fontSize: 11 }}>Integrations</button>
           <button className="dm-btn" onClick={() => router.push('/dashboard/settings')} style={{ fontSize: 11 }}>Settings</button>
           <button className="dm-btn" onClick={() => router.push('/dashboard')} style={{ fontSize: 11 }}>My Dashboard</button>

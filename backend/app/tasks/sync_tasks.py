@@ -109,6 +109,7 @@ def sync_github_integration(
     try:
         github_service = GitHubService.from_integration_config(integration)
         org_name = integration.config.get("organization_name")
+        repos = integration.config.get("repos")
 
         # Get all developers with GitHub username
         developers = (
@@ -129,7 +130,7 @@ def sync_github_integration(
         for developer in developers:
             try:
                 result = github_service.sync_all_for_developer(
-                    db, developer, org_name, days_back
+                    db, developer, org_name, days_back, repos
                 )
 
                 total_commits += result.get("commits", 0)

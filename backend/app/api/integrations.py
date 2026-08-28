@@ -15,11 +15,12 @@ from app.schemas.integration import (
     IntegrationTestResponse,
 )
 from app.models import IntegrationConfig, IntegrationType, IntegrationStatus, User
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_active_user, get_current_org_id
 from app.services.github_service import GitHubService
 from app.services.jira_service import JiraService
 from app.services.slack_service import SlackService
 from app.config import settings
+from app.utils.security import encrypt_secret
 
 router = APIRouter()
 
@@ -57,6 +58,7 @@ def create_github_integration(
     integration_data: GitHubIntegrationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Configure GitHub integration (Admin only)
@@ -79,7 +81,7 @@ def create_github_integration(
             detail="Only admins can configure integrations",
         )
 
-    organization_id = current_user.organization_id or 1
+    organization_id = org_id
 
     # Test the connection first
     try:
@@ -97,7 +99,8 @@ def create_github_integration(
 
     return _upsert_integration(db, organization_id, IntegrationType.GITHUB, {
         "organization_name": integration_data.organization_name,
-        "access_token": integration_data.access_token,
+        "access_token": encrypt_secret(integration_data.access_token),
+        "repos": integration_data.repos,
     })
 
 
@@ -106,6 +109,7 @@ def create_jira_integration(
     integration_data: JiraIntegrationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Configure Jira integration (Admin only)
@@ -128,7 +132,7 @@ def create_jira_integration(
             detail="Only admins can configure integrations",
         )
 
-    organization_id = current_user.organization_id or 1
+    organization_id = org_id
 
     # Test the connection first
     try:
@@ -151,7 +155,7 @@ def create_jira_integration(
     return _upsert_integration(db, organization_id, IntegrationType.JIRA, {
         "url": str(integration_data.workspace_url),
         "username": integration_data.username,
-        "api_token": integration_data.api_token,
+        "api_token": encrypt_secret(integration_data.api_token),
         "project_keys": integration_data.project_keys or [],
     })
 
@@ -161,12 +165,13 @@ def create_slack_integration(
     integration_data: SlackIntegrationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """Configure Slack integration (Admin only)"""
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can configure integrations")
 
-    organization_id = current_user.organization_id or 1
+    organization_id = org_id
 
     try:
         slack_service = SlackService(bot_token=integration_data.bot_token)
@@ -176,7 +181,7 @@ def create_slack_integration(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Slack connection error: {str(e)}")
 
     return _upsert_integration(db, organization_id, IntegrationType.SLACK, {
-        "bot_token": integration_data.bot_token,
+        "bot_token": encrypt_secret(integration_data.bot_token),
         "channel_ids": integration_data.channel_ids,
     })
 
@@ -185,6 +190,7 @@ def create_slack_integration(
 def list_integrations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     List all integrations for the organization
@@ -196,11 +202,9 @@ def list_integrations(
     Returns:
         List of integrations
     """
-    organization_id = current_user.organization_id or 1
-
     integrations = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.organization_id == organization_id)
+        .filter(IntegrationConfig.organization_id == org_id)
         .all()
     )
 
@@ -213,6 +217,7 @@ async def trigger_sync(
     sync_request: IntegrationSyncRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Trigger manual sync for an integration
@@ -245,7 +250,7 @@ async def trigger_sync(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id)
+        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
         .first()
     )
 
@@ -276,6 +281,7 @@ def get_sync_status(
     integration_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get sync status for an integration
@@ -293,7 +299,7 @@ def get_sync_status(
     """
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id)
+        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
         .first()
     )
 
@@ -317,6 +323,7 @@ def test_integration(
     integration_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Test an integration connection
@@ -341,7 +348,7 @@ def test_integration(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id)
+        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
         .first()
     )
 
@@ -385,6 +392,7 @@ def delete_integration(
     integration_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Delete an integration (Admin only)
@@ -406,7 +414,7 @@ def delete_integration(
 
     integration = (
         db.query(IntegrationConfig)
-        .filter(IntegrationConfig.id == integration_id)
+        .filter(IntegrationConfig.id == integration_id, IntegrationConfig.organization_id == org_id)
         .first()
     )
 

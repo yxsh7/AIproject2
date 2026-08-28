@@ -27,7 +27,7 @@ from app.schemas.analytics import (
 )
 from app.models import User, DeveloperProfile, WorkActivity, ProductivityScore
 from app.models.developer import RoleLevel
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_active_user, get_current_org_id
 from app.services.scoring_service import ProductivityScoringService, ROLE_WEIGHTS
 from app.services.insights_service import InsightsService
 
@@ -35,44 +35,78 @@ router = APIRouter()
 
 
 def check_analytics_access(
-    current_user: User, developer_id: int, db: Session
+    current_user: User, developer_id: int, org_id: int, db: Session
 ) -> bool:
-    """Check if user has access to developer's analytics."""
+    """Check if user has access to developer's analytics. Cross-org access is always denied."""
+    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    if developer is None or developer.organization_id != org_id:
+        return False
     if current_user.role in ["manager", "admin"]:
         return True
-    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
-    return developer is not None and developer.user_id == current_user.id
+    return developer.user_id == current_user.id
 
 
 def _get_developer_or_raise(
-    developer_id: int, current_user: User, db: Session
+    developer_id: int, current_user: User, org_id: int, db: Session
 ) -> DeveloperProfile:
-    """Fetch developer by id, raising 403/404 as appropriate."""
-    if not check_analytics_access(current_user, developer_id, db):
+    """Fetch developer by id, raising 403/404 as appropriate. A developer belonging to
+    another organization is treated as not found (404), not forbidden, so callers can't
+    use this endpoint to confirm another tenant's data exists."""
+    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
+    if developer is None or developer.organization_id != org_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found")
+    if not check_analytics_access(current_user, developer_id, org_id, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this developer's analytics",
         )
-    developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
-    if not developer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Developer not found")
     return developer
 
 
 def _resolve_dates(
     developer_id: int, start_date: date, end_date: date, db: Session
 ) -> tuple:
-    """If the default 30-day window has no data, shift to the most recent activity window."""
-    if start_date == end_date - timedelta(days=30):
-        latest = (
-            db.query(WorkActivity)
-            .filter(WorkActivity.developer_id == developer_id)
-            .order_by(WorkActivity.activity_date.desc())
-            .first()
-        )
-        if latest and latest.activity_date < start_date:
-            end_date = latest.activity_date
-            start_date = end_date - timedelta(days=30)
+    """
+    If the caller is using the default trailing-30-day window, replace it with
+    whichever 30-day window (ending on some date the developer has activity)
+    contains the most activity — not just whichever window has any activity
+    at all, and not just the single most recent activity date.
+
+    A developer can have two very different activity clusters at once (e.g.
+    older data synced from a real integration alongside newer synthetic seed
+    data, or vice versa). A window can be technically non-empty (one stray
+    activity) while still missing a much larger cluster entirely — "not
+    empty" isn't the same as "the useful window" — so this always compares
+    candidate windows by activity count rather than stopping at the first
+    non-empty one. For an actively-worked developer this naturally resolves
+    back to the same default window (it's usually already the densest), so
+    it's a no-op in the common case.
+    """
+    if start_date != end_date - timedelta(days=30):
+        return start_date, end_date  # caller asked for a specific range — honor it
+
+    dates = sorted(
+        row[0]
+        for row in db.query(WorkActivity.activity_date)
+        .filter(WorkActivity.developer_id == developer_id)
+        .all()
+    )
+    if not dates:
+        return start_date, end_date
+
+    best_end = end_date
+    best_count = sum(1 for d in dates if start_date <= d <= end_date)
+
+    for candidate_end in dates:
+        window_start = candidate_end - timedelta(days=30)
+        count = sum(1 for d in dates if window_start <= d <= candidate_end)
+        if count > best_count:
+            best_count = count
+            best_end = candidate_end
+
+    if best_end != end_date:
+        end_date = best_end
+        start_date = end_date - timedelta(days=30)
     return start_date, end_date
 
 
@@ -83,6 +117,7 @@ def get_developer_overview(
     end_date: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get analytics overview for a developer
@@ -100,23 +135,20 @@ def get_developer_overview(
     Raises:
         HTTPException: If user doesn't have access or developer not found
     """
-    developer = _get_developer_or_raise(developer_id, current_user, db)
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    # Get most recent saved productivity score (avoids unsaved object with id=None)
-    scoring_service = ProductivityScoringService(db)
-    productivity_score = scoring_service.get_latest_score(developer_id)
-    # If no saved score exists yet, calculate and save one now
-    if not productivity_score:
-        new_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
-        if new_score:
-            productivity_score = scoring_service.save_score(new_score)
+    # For the default window, resolve to whichever 30-day span actually has
+    # the most activity — a developer can have a sparse recent cluster and a
+    # much larger older one (e.g. real synced history alongside newer seed
+    # data), and the plain default window can be technically non-empty while
+    # still missing almost everything.
+    start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
 
-    # Get activity summary
     activities = (
         db.query(WorkActivity)
         .filter(
@@ -126,6 +158,15 @@ def get_developer_overview(
         )
         .all()
     )
+
+    # Get most recent saved productivity score (avoids unsaved object with id=None)
+    scoring_service = ProductivityScoringService(db)
+    productivity_score = scoring_service.get_latest_score(developer_id)
+    # If no saved score exists yet, calculate and save one now
+    if not productivity_score:
+        new_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
+        if new_score:
+            productivity_score = scoring_service.save_score(new_score)
 
     activity_summary = {
         "total_activities": len(activities),
@@ -175,6 +216,7 @@ def get_developer_productivity(
     include_comparison: bool = Query(default=True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get detailed productivity analytics for a developer
@@ -190,19 +232,20 @@ def get_developer_productivity(
     Returns:
         Detailed productivity analytics
     """
-    developer = _get_developer_or_raise(developer_id, current_user, db)
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
+    # Resolve to whichever 30-day window has the most activity before scoring —
+    # a technically non-empty default window can still miss a much larger
+    # cluster of activity elsewhere (see _resolve_dates docstring).
+    start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
+
     scoring_service = ProductivityScoringService(db)
     productivity_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
-
-    if not productivity_score:
-        start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
-        productivity_score = scoring_service.calculate_developer_score(developer_id, start_date, end_date)
 
     if not productivity_score:
         raise HTTPException(
@@ -232,7 +275,7 @@ def get_developer_productivity(
     if include_comparison and developer.team:
         # Team comparison
         team_scores = scoring_service.calculate_team_scores(
-            developer.team, start_date, end_date
+            developer.team, org_id, start_date, end_date
         )
 
         if "error" not in team_scores:
@@ -287,6 +330,7 @@ def get_developer_trends(
     periods: int = Query(default=12, ge=1, le=52),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get historical productivity trends for a developer
@@ -300,7 +344,7 @@ def get_developer_trends(
     Returns:
         Historical trends data
     """
-    developer = _get_developer_or_raise(developer_id, current_user, db)
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     # Get trends
     scoring_service = ProductivityScoringService(db)
@@ -341,6 +385,7 @@ def get_work_breakdown(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get detailed work breakdown for a developer
@@ -356,12 +401,17 @@ def get_work_breakdown(
     Returns:
         Work breakdown by type, complexity, and source
     """
-    developer = _get_developer_or_raise(developer_id, current_user, db)
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=30)
+
+    # Resolve to whichever 30-day window has the most activity before querying —
+    # a technically non-empty default window can still miss a much larger
+    # cluster of activity elsewhere (see _resolve_dates docstring).
+    start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
 
     activities = (
         db.query(WorkActivity)
@@ -373,19 +423,6 @@ def get_work_breakdown(
         .order_by(WorkActivity.activity_date.desc())
         .all()
     )
-
-    if not activities:
-        start_date, end_date = _resolve_dates(developer_id, start_date, end_date, db)
-        activities = (
-            db.query(WorkActivity)
-            .filter(
-                WorkActivity.developer_id == developer_id,
-                WorkActivity.activity_date >= start_date,
-                WorkActivity.activity_date <= end_date,
-            )
-            .order_by(WorkActivity.activity_date.desc())
-            .all()
-        )
 
     if not activities:
         raise HTTPException(
@@ -446,6 +483,7 @@ def get_team_overview(
     end_date: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get analytics overview for a team
@@ -473,9 +511,10 @@ def get_team_overview(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    # Calculate team scores
+    # Calculate team scores (scoped to the caller's organization, so a same-named
+    # team in another org never blends into these results)
     scoring_service = ProductivityScoringService(db)
-    team_data = scoring_service.calculate_team_scores(team, start_date, end_date)
+    team_data = scoring_service.calculate_team_scores(team, org_id, start_date, end_date)
 
     if "error" in team_data:
         raise HTTPException(
@@ -509,6 +548,7 @@ def calculate_productivity_score(
     request: ScoreCalculationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Calculate/recalculate productivity score
@@ -542,7 +582,7 @@ def calculate_productivity_score(
         developer_id = developer.id
     else:
         # Check if user can calculate for other developers
-        if not check_analytics_access(current_user, developer_id, db):
+        if not check_analytics_access(current_user, developer_id, org_id, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to calculate scores for this developer",
@@ -579,6 +619,7 @@ def get_developer_insights(
     regenerate: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Get AI-generated insights for a developer
@@ -594,7 +635,7 @@ def get_developer_insights(
     Returns:
         AI-generated insights and recommendations
     """
-    developer = _get_developer_or_raise(developer_id, current_user, db)
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     if not end_date:
         end_date = date.today()
@@ -738,6 +779,7 @@ def trigger_ai_analysis(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    org_id: int = Depends(get_current_org_id),
 ):
     """
     Manually trigger AI analysis for a developer.
@@ -753,18 +795,8 @@ def trigger_ai_analysis(
             detail="Only managers and admins can trigger AI analysis",
         )
 
-    # Verify developer exists
-    developer = (
-        db.query(DeveloperProfile)
-        .filter(DeveloperProfile.id == developer_id)
-        .first()
-    )
-
-    if not developer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Developer not found",
-        )
+    # Verify developer exists and belongs to the caller's organization
+    developer = _get_developer_or_raise(developer_id, current_user, org_id, db)
 
     developer_name = developer.user.full_name if developer.user else f"developer {developer_id}"
     background_tasks.add_task(_run_analysis_pipeline, developer_id, limit)

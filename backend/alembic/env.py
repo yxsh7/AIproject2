@@ -27,6 +27,7 @@ from app.models import (
     AIInsight,
     SlackMessage,
     SlackReaction,
+    OrganizationInvite,
 )
 
 # this is the Alembic Config object, which provides

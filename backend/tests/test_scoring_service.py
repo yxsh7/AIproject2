@@ -209,9 +209,9 @@ class TestCalculateDeveloperScore:
 
 
 class TestCalculateTeamScores:
-    def test_empty_team_returns_error(self, db):
+    def test_empty_team_returns_error(self, db, org):
         service = ProductivityScoringService(db)
-        result = service.calculate_team_scores("nonexistent-team")
+        result = service.calculate_team_scores("nonexistent-team", org.id)
         assert "error" in result
 
     def test_team_with_activities_returns_aggregates(
@@ -219,7 +219,7 @@ class TestCalculateTeamScores:
     ):
         service = ProductivityScoringService(db)
         start = date.today() - timedelta(days=15)
-        result = service.calculate_team_scores("backend", start, date.today())
+        result = service.calculate_team_scores("backend", developer_profile.organization_id, start, date.today())
 
         assert "error" not in result
         assert result["team_size"] >= 1
@@ -234,6 +234,11 @@ class TestCalculateTeamScores:
         from unittest.mock import patch, call
         from sqlalchemy import event
 
+        # Read this before installing the query-capture listener: SQLAlchemy expires
+        # attributes on commit, so accessing .organization_id for the first time here
+        # would otherwise trigger its own refresh query and inflate the count below.
+        org_id = developer_profile.organization_id
+
         queries = []
 
         @event.listens_for(db.bind, "before_cursor_execute")
@@ -243,7 +248,7 @@ class TestCalculateTeamScores:
 
         service = ProductivityScoringService(db)
         start = date.today() - timedelta(days=15)
-        service.calculate_team_scores("backend", start, date.today())
+        service.calculate_team_scores("backend", org_id, start, date.today())
 
         # Should have exactly 1 developer query + 1 activities query
         dev_queries = [q for q in queries if "developer_profiles" in q]

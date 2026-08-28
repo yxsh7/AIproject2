@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/auth';
-import { RegisterData } from '../../types';
+import { RegisterData, RegisterMode } from '../../types';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register, isLoading, error, clearError } = useAuthStore();
 
   const [formData, setFormData] = useState<RegisterData>({
-    email: '', password: '', full_name: '', role: 'developer',
+    email: '', password: '', full_name: '', mode: 'create_org', organization_name: '', invite_code: '',
   });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -22,11 +22,23 @@ export default function RegisterPage() {
     clearError();
   };
 
+  const setMode = (mode: RegisterMode) => {
+    setFormData(prev => ({ ...prev, mode }));
+    setLocalError(null);
+    clearError();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
     if (formData.password !== confirmPassword) { setLocalError('Passwords do not match'); return; }
     if (formData.password.length < 8) { setLocalError('Password must be at least 8 characters'); return; }
+    if (formData.mode === 'create_org' && !formData.organization_name) {
+      setLocalError('Company name is required'); return;
+    }
+    if (formData.mode === 'join_org' && !formData.invite_code) {
+      setLocalError('Invite code is required'); return;
+    }
     try {
       await register(formData);
       router.push('/dashboard');
@@ -74,30 +86,53 @@ export default function RegisterPage() {
             <input className="dm-input" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="you@company.com" required disabled={isLoading} />
           </div>
 
-          {/* Role picker */}
+          {/* Mode picker: new company vs. joining an existing one */}
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 8 }}>Role</label>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 8 }}>Getting started</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['developer', 'manager'] as const).map(r => (
+              {([
+                { value: 'create_org' as const, label: 'Create a company' },
+                { value: 'join_org' as const, label: 'Join with invite code' },
+              ]).map(opt => (
                 <button
-                  key={r}
+                  key={opt.value}
                   type="button"
-                  onClick={() => setFormData(p => ({ ...p, role: r }))}
+                  onClick={() => setMode(opt.value)}
                   disabled={isLoading}
                   style={{
                     flex: 1, padding: '8px 0', borderRadius: 7, cursor: 'pointer',
-                    border: formData.role === r ? '1px solid rgba(129,140,248,0.35)' : '1px solid var(--border-1)',
-                    background: formData.role === r ? 'rgba(129,140,248,0.08)' : 'transparent',
-                    color: formData.role === r ? 'var(--cyan)' : 'var(--txt-3)',
-                    fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: formData.role === r ? 500 : 400,
+                    border: formData.mode === opt.value ? '1px solid rgba(129,140,248,0.35)' : '1px solid var(--border-1)',
+                    background: formData.mode === opt.value ? 'rgba(129,140,248,0.08)' : 'transparent',
+                    color: formData.mode === opt.value ? 'var(--cyan)' : 'var(--txt-3)',
+                    fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: formData.mode === opt.value ? 500 : 400,
                     transition: 'all 0.12s',
                   }}
                 >
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                  {opt.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {formData.mode === 'create_org' ? (
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Company name</label>
+              <input
+                className="dm-input" type="text" name="organization_name"
+                value={formData.organization_name} onChange={handleChange}
+                placeholder="Acme Robotics" required disabled={isLoading}
+              />
+            </div>
+          ) : (
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Invite code</label>
+              <input
+                className="dm-input" type="text" name="invite_code"
+                value={formData.invite_code} onChange={handleChange}
+                placeholder="Paste the code your admin sent you" required disabled={isLoading}
+              />
+            </div>
+          )}
 
           <div>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--txt-3)', marginBottom: 6 }}>Password</label>

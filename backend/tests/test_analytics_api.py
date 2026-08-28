@@ -105,6 +105,7 @@ class TestDeveloperProductivity:
         old_date = date.today() - timedelta(days=90)
         a = WorkActivity(
             developer_id=developer_profile.id,
+            organization_id=developer_profile.organization_id,
             source_type="git",
             source_id="old-commit",
             work_type=WorkType.CODE,
@@ -213,6 +214,7 @@ class TestWorkBreakdown:
         old_date = date.today() - timedelta(days=90)
         db.add(WorkActivity(
             developer_id=developer_profile.id,
+            organization_id=developer_profile.organization_id,
             source_type="git", source_id="old-2",
             work_type=WorkType.DOCUMENTATION,
             activity_date=old_date,
@@ -311,3 +313,74 @@ class TestDeveloperInsights:
             headers=auth_header(developer_user),
         )
         assert r.status_code == 403
+
+
+# ─── Cross-organization isolation ─────────────────────────────────────────────
+# These exercise the actual regression target of the multi-tenancy rework:
+# a manager/admin in one org must never be able to read another org's data,
+# even though both orgs use identical resource-id shapes and (deliberately,
+# for the team test) the same team name.
+
+class TestCrossOrgIsolation:
+    def test_manager_cannot_view_other_org_developer(
+        self, client, manager_user, org2_developer_profile
+    ):
+        r = client.get(
+            f"/api/analytics/developers/{org2_developer_profile.id}/overview",
+            headers=auth_header(manager_user),
+        )
+        assert r.status_code == 404
+
+    def test_manager_cannot_trigger_analysis_for_other_org_developer(
+        self, client, manager_user, org2_developer_profile
+    ):
+        r = client.post(
+            f"/api/analytics/developers/{org2_developer_profile.id}/analyze",
+            headers=auth_header(manager_user),
+        )
+        assert r.status_code == 404
+
+    def test_team_overview_does_not_blend_across_orgs(
+        self, client, manager_user, developer_profile, org2_manager_user, org2_developer_profile, db
+    ):
+        """Both orgs have a developer on a team literally named 'backend' — each
+        manager's team-overview call must only ever see their own org's developer."""
+        from app.models.work_activity import WorkActivity, WorkType
+        from datetime import date
+
+        db.add(WorkActivity(
+            developer_id=org2_developer_profile.id,
+            organization_id=org2_developer_profile.organization_id,
+            source_type="git", source_id="org2-commit",
+            work_type=WorkType.CODE, activity_date=date.today(),
+            complexity_score=5, impact_score=5, quality_score=5,
+            ai_analysis={},
+        ))
+        db.commit()
+
+        r = client.get(
+            "/api/analytics/teams/backend/overview",
+            headers=auth_header(manager_user),
+        )
+        if r.status_code == 200:
+            body = r.json()
+            dev_ids = {s["developer_id"] for s in body["individual_scores"]}
+            assert org2_developer_profile.id not in dev_ids
+
+    def test_list_developers_scoped_to_own_org(
+        self, client, manager_user, developer_profile, org2_developer_profile
+    ):
+        r = client.get("/api/developers/", headers=auth_header(manager_user))
+        assert r.status_code == 200
+        dev_ids = {d["id"] for d in r.json()}
+        assert developer_profile.id in dev_ids
+        assert org2_developer_profile.id not in dev_ids
+
+    def test_get_developer_other_org_returns_404(
+        self, client, manager_user, org2_developer_profile
+    ):
+        r = client.get(
+            f"/api/developers/{org2_developer_profile.id}",
+            headers=auth_header(manager_user),
+        )
+        assert r.status_code == 404
