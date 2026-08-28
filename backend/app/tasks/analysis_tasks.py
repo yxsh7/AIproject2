@@ -91,6 +91,7 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
         analyzed_count = 0
         work_activities_created = 0
+        failed_count = 0
 
         for commit in commits:
             try:
@@ -104,7 +105,9 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                     commit.analyzed = 1
                     continue
 
-                # Analyze commit
+                # Analyze commit — raises AIAnalysisError if AI can't complete
+                # it even after retries; the commit stays unanalyzed (not
+                # scored with rule-based data) so it's retried next run.
                 analysis = analyzer.analyze_commit(
                     commit_message=commit.message,
                     files_changed=commit.files_changed,
@@ -122,6 +125,7 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                 impact_str = analysis.get("impact", analysis.get("impact_level", "medium"))
                 work_activity = WorkActivity(
                     developer_id=developer_id,
+                    organization_id=developer.organization_id,
                     activity_date=commit.committed_at.date(),
                     work_type=_safe_work_type(analysis.get("work_type", "feature")),
                     complexity_score=analysis["complexity_score"],
@@ -158,7 +162,8 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
                     logger.info(f"Analyzed {analyzed_count} commits so far...")
 
             except Exception as e:
-                logger.error(f"Error analyzing commit {commit.id}: {e}")
+                failed_count += 1
+                logger.error(f"Failed to analyze commit {commit.id} (sha={commit.commit_sha}): {e}")
                 continue
 
         # Final commit
@@ -166,12 +171,14 @@ def analyze_git_commits(developer_id: int, limit: int = 100):
 
         logger.info(
             f"Successfully analyzed {analyzed_count} commits, "
-            f"created {work_activities_created} work activities"
+            f"created {work_activities_created} work activities, "
+            f"{failed_count} commits failed and remain unanalyzed for retry"
         )
 
         return {
             "analyzed_count": analyzed_count,
             "work_activities_created": work_activities_created,
+            "failed_count": failed_count,
         }
 
     except Exception as e:
@@ -230,6 +237,7 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
         analyzed_count = 0
         work_activities_created = 0
+        failed_count = 0
 
         for ticket in tickets:
             try:
@@ -246,7 +254,9 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                 # Get ticket comments
                 comments = [comment.comment_text for comment in ticket.comments]
 
-                # Classify ticket
+                # Classify ticket — raises AIAnalysisError if AI can't complete
+                # it even after retries; the ticket stays unanalyzed (not
+                # classified with rule-based data) so it's retried next run.
                 classification = classifier.classify_ticket(
                     ticket_key=ticket.ticket_key,
                     title=ticket.title,
@@ -263,6 +273,7 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                 # Create work activity
                 work_activity = WorkActivity(
                     developer_id=developer_id,
+                    organization_id=developer.organization_id,
                     activity_date=ticket.created_at.date(),
                     work_type=_safe_work_type(classification.get("work_type", "code")),
                     complexity_score=classification["complexity_score"],
@@ -289,7 +300,8 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
                     logger.info(f"Analyzed {analyzed_count} tickets so far...")
 
             except Exception as e:
-                logger.error(f"Error analyzing ticket {ticket.id}: {e}")
+                failed_count += 1
+                logger.error(f"Failed to analyze ticket {ticket.id} ({ticket.ticket_key}): {e}")
                 continue
 
         # Final commit
@@ -297,12 +309,14 @@ def analyze_jira_tickets(developer_id: int, limit: int = 100):
 
         logger.info(
             f"Successfully analyzed {analyzed_count} tickets, "
-            f"created {work_activities_created} work activities"
+            f"created {work_activities_created} work activities, "
+            f"{failed_count} tickets failed and remain unanalyzed for retry"
         )
 
         return {
             "analyzed_count": analyzed_count,
             "work_activities_created": work_activities_created,
+            "failed_count": failed_count,
         }
 
     except Exception as e:
@@ -360,10 +374,14 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
 
         analyzer = ReviewQualityAnalyzer()
         analyzed_count = 0
+        failed_count = 0
 
         for review in reviews:
             try:
                 comments = review.analysis_result.get("raw_comments", [])
+                # Raises AIAnalysisError if AI can't complete it even after
+                # retries; review.quality_score stays None (not scored with
+                # rule-based data) so it's retried next run.
                 result = analyzer.analyze_review(
                     reviewer_username=developer.github_username or "",
                     pr_title="",
@@ -385,6 +403,7 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
                 if not existing:
                     work_activity = WorkActivity(
                         developer_id=developer_id,
+                        organization_id=developer.organization_id,
                         activity_date=review.reviewed_at.date(),
                         work_type=WorkType.CODE_REVIEW,
                         complexity_score=5,
@@ -404,11 +423,16 @@ def analyze_code_reviews(developer_id: int, limit: int = 100):
                     db.commit()
 
             except Exception as e:
-                logger.error(f"Error analyzing review {review.id}: {e}")
+                failed_count += 1
+                logger.error(f"Failed to analyze review {review.id}: {e}")
                 continue
 
         db.commit()
-        return {"analyzed_count": analyzed_count}
+        logger.info(
+            f"Successfully analyzed {analyzed_count} reviews, "
+            f"{failed_count} reviews failed and remain unanalyzed for retry"
+        )
+        return {"analyzed_count": analyzed_count, "failed_count": failed_count}
 
     except Exception as e:
         logger.error(f"Error in analyze_code_reviews: {e}")
@@ -476,6 +500,7 @@ def analyze_slack_messages(developer_id: int, limit: int = 100):
                 if not existing:
                     work_activity = WorkActivity(
                         developer_id=developer_id,
+                        organization_id=developer.organization_id,
                         activity_date=msg.message_date,
                         work_type=work_type,
                         complexity_score=2,

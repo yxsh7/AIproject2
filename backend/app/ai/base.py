@@ -1,12 +1,21 @@
 """Base AI model factory for DevMetrics AI"""
 import json
 import logging
+import time
 import requests
 from typing import Optional, Any, Dict
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class AIAnalysisError(Exception):
+    """Raised when AI analysis could not be completed — either no provider is
+    configured or every retry attempt failed. Callers must not substitute
+    rule-based/heuristic data for this; the item should be left unanalyzed
+    so it can be retried on a future run."""
+    pass
 
 _OPENROUTER_HEADERS = {
     "HTTP-Referer": "http://localhost:3000",
@@ -60,6 +69,28 @@ def extract_json(text: str) -> Dict:
     raise ValueError(f"Could not extract JSON from LLM response: {text[:300]}")
 
 
+def invoke_and_parse_json(llm: Any, prompt: str, retries: int = 3, backoff_seconds: float = 1.5) -> Dict:
+    """
+    Call the LLM and parse its response as JSON, retrying transient failures
+    (timeouts, truncated/malformed JSON, rate limits) before giving up.
+
+    Raises AIAnalysisError if every attempt fails — callers must treat this as
+    a hard failure for the item being analyzed, not fall back to heuristics.
+    """
+    last_error: Optional[Exception] = None
+    for attempt in range(1, retries + 1):
+        try:
+            response = llm.invoke(prompt)
+            return extract_json(response.content)
+        except Exception as e:
+            last_error = e
+            logger.warning(f"AI call attempt {attempt}/{retries} failed: {e}")
+            if attempt < retries:
+                time.sleep(backoff_seconds * attempt)
+
+    raise AIAnalysisError(f"AI analysis failed after {retries} attempts: {last_error}") from last_error
+
+
 class _OpenRouterResponse:
     """Minimal wrapper so callers can do response.content"""
     def __init__(self, content: str):
@@ -95,6 +126,15 @@ class _OpenRouterClient:
         )
         resp.raise_for_status()
         data = resp.json()
+
+        # OpenRouter can return HTTP 200 with an error body (e.g. the free
+        # model is overloaded/rate-limited) — raise_for_status() won't catch
+        # that, so check explicitly instead of letting a bare KeyError surface.
+        if "error" in data:
+            raise RuntimeError(f"OpenRouter returned an error: {data['error']}")
+        if "choices" not in data or not data["choices"]:
+            raise RuntimeError(f"OpenRouter response had no choices: {data}")
+
         content = data["choices"][0]["message"]["content"]
         return _OpenRouterResponse(content)
 

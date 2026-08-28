@@ -22,7 +22,7 @@ DevMetrics AI analyzes developer contributions across GitHub, Jira, and Slack us
 |---|---|
 | Backend | FastAPI, SQLAlchemy, PostgreSQL, Alembic |
 | Background tasks | Celery, Redis |
-| AI | OpenRouter (free inference), rule-based fallback |
+| AI | OpenRouter (free inference) |
 | Integrations | PyGithub, Atlassian API, slack-sdk |
 | Frontend | Next.js 14 (App Router), TypeScript, TailwindCSS |
 | Auth | JWT, bcrypt |
@@ -34,7 +34,7 @@ DevMetrics AI analyzes developer contributions across GitHub, Jira, and Slack us
 
 - **Role-weighted scoring** — `ROLE_WEIGHTS` per level drive how complexity, velocity, quality, impact, collaboration, and mentoring are blended into an overall score
 - **N+1-free team scoring** — bulk-fetches all developer activities in 2 queries instead of N+1
-- **AI with rule-based fallback** — if no API key is configured the system scores everything using heuristics; AI enriches but isn't required
+- **AI-only scoring, no silent fallback** — commits, tickets, and reviews are scored exclusively by AI; if a call fails it's retried automatically, and if it still fails the item is left unanalyzed (never scored with fabricated heuristic data) so it's picked up again on the next analysis run
 - **Demo mode** — set `DEMO_MODE=true` to serve pre-loaded sample data without requiring real integration credentials
 
 ---

@@ -1,13 +1,15 @@
 """AI agent for analyzing code review quality"""
 import logging
 
-from app.ai.base import get_ai_chat_model, extract_json
+from app.ai.base import get_ai_chat_model, invoke_and_parse_json, AIAnalysisError
 
 logger = logging.getLogger(__name__)
 
 
 class ReviewQualityAnalyzer:
-    """Analyzes the quality of code reviews using AI with rule-based fallback."""
+    """Analyzes the quality of code reviews using AI. No rule-based fallback:
+    if AI analysis can't be completed, callers get an AIAnalysisError so the
+    review is left unanalyzed rather than scored with fabricated data."""
 
     def __init__(self):
         self.model = get_ai_chat_model()
@@ -31,6 +33,12 @@ class ReviewQualityAnalyzer:
         Returns:
             Dict with quality_score (0-10), mentoring_detected (bool),
             comment_depth ('shallow'/'moderate'/'deep'), explanation (str)
+
+        Raises:
+            AIAnalysisError: if no AI provider is configured, or the AI call/
+                response parsing fails after retries. Not raised when there
+                are simply no comments to analyze — that's a legitimate empty
+                result, not an AI failure.
         """
         if not comments:
             return {
@@ -40,65 +48,9 @@ class ReviewQualityAnalyzer:
                 "explanation": "No review comments found.",
             }
 
-        if self.model:
-            try:
-                return self._ai_analyze(reviewer_username, pr_title, review_state, comments)
-            except Exception as e:
-                logger.warning(f"AI review analysis failed, using fallback: {e}")
+        if not self.model:
+            raise AIAnalysisError("No AI provider configured")
 
-        return self._fallback_analyze(comments)
-
-    def _fallback_analyze(self, comments: list[str]) -> dict:
-        """Rule-based quality analysis when AI is unavailable."""
-        all_text = " ".join(comments)
-        avg_len = sum(len(c) for c in comments) / len(comments)
-
-        # Base score from comment length (avg 100 chars → 5 points, max 5)
-        base_score = min(avg_len / 20.0, 5.0)
-
-        # Bonus: questions (engagement) — up to +2
-        question_count = all_text.count("?")
-        question_bonus = min(question_count / 3.0, 2.0)
-
-        # Bonus: code suggestions — +2 if any ``` found
-        code_bonus = 2.0 if "```" in all_text else 0.0
-
-        # Bonus: constructive language keywords — +1
-        constructive_keywords = ["suggest", "consider", "why", "have you", "alternative", "what about", "instead"]
-        keyword_bonus = 1.0 if any(kw in all_text.lower() for kw in constructive_keywords) else 0.0
-
-        quality_score = min(base_score + question_bonus + code_bonus + keyword_bonus, 10.0)
-
-        # Mentoring: any comment > 100 chars AND contains teaching language
-        teaching_words = ["suggest", "consider", "explain", "note that", "keep in mind", "best practice", "have you", "alternative"]
-        mentoring_detected = any(
-            len(c) > 100 and any(tw in c.lower() for tw in teaching_words)
-            for c in comments
-        )
-
-        # Comment depth
-        if avg_len < 50:
-            comment_depth = "shallow"
-        elif avg_len < 150:
-            comment_depth = "moderate"
-        else:
-            comment_depth = "deep"
-
-        return {
-            "quality_score": round(quality_score, 1),
-            "mentoring_detected": mentoring_detected,
-            "comment_depth": comment_depth,
-            "explanation": f"Rule-based: avg_len={avg_len:.0f}, questions={question_count}, code_blocks={'yes' if code_bonus else 'no'}",
-        }
-
-    def _ai_analyze(
-        self,
-        reviewer_username: str,
-        pr_title: str,
-        review_state: str,
-        comments: list[str],
-    ) -> dict:
-        """AI-powered quality analysis."""
         comments_text = "\n---\n".join(comments[:10])  # Limit to 10 comments
 
         prompt = f"""Analyze the quality of this code review and respond with JSON only.
@@ -123,9 +75,7 @@ Scoring guide:
 - 6-8: Constructive feedback, questions, suggestions
 - 9-10: Deep technical insights, code examples, mentoring"""
 
-        response = self.model.invoke(prompt)
-        content = response.content if hasattr(response, 'content') else str(response)
-        result = extract_json(content)
+        result = invoke_and_parse_json(self.model, prompt)
 
         return {
             "quality_score": round(float(result.get("quality_score", 5)), 1),
