@@ -1,172 +1,174 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+
+const FEATURES = [
+  {
+    title: 'See who\'s actually moving the needle',
+    desc: 'Multi-dimensional AI scoring — complexity, velocity, quality, impact, collaboration, mentoring — weighted by role, so a junior is never measured against a principal.',
+    accent: 'var(--cyan)',
+  },
+  {
+    title: 'Learn from your top performers',
+    desc: 'Surface the patterns behind your strongest work — not just a leaderboard, but what specifically is working, so the rest of the team can pick it up.',
+    accent: 'var(--green)',
+  },
+  {
+    title: 'Catch bottlenecks and burnout early',
+    desc: 'AI-generated anomaly detection flags unusual drops in activity, one-sided workload, and collaboration gaps before they become a resignation.',
+    accent: 'var(--amber)',
+  },
+  {
+    title: 'Your data never leaves your environment',
+    desc: 'Self-hosted by design — real Docker Compose, real migrations, real CI. Deploy inside your own infrastructure instead of pooling your codebase into someone else\'s SaaS.',
+    accent: 'var(--red)',
+  },
+];
+
+const STEPS = [
+  { step: '1', title: 'Connect your tools', desc: 'Link GitHub, Jira, and Slack — takes minutes, not a rollout project' },
+  { step: '2', title: 'Sync your data', desc: 'Commits, PRs, reviews, tickets, and team activity pulled automatically' },
+  { step: '3', title: 'AI analysis', desc: 'Every item is scored by AI — never a hardcoded fallback masquerading as insight' },
+  { step: '4', title: 'Everyone sees it', desc: 'Managers get visibility, developers see the same view — not a surveillance tool' },
+];
+
+const ROADMAP = [
+  { title: 'Mentoring network view', desc: 'Who reviews whom — a relationship graph of how knowledge actually moves through your team' },
+  { title: '1:1 talking points', desc: 'Auto-generated from recent AI insights, ready before you walk into the room' },
+  { title: 'Custom scoring weights', desc: 'Define what "impact" means for your team — every org measures engineering differently' },
+];
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-      {/* Animated background gradients */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
-      </div>
-
-      <div className="relative z-10 container mx-auto px-4 py-16">
-        {/* Header */}
-        <nav className="flex justify-between items-center mb-20">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">D</span>
-            </div>
-            <span className="text-xl font-semibold text-white">DevMetrics AI</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
-            >
-              Login
-            </Link>
-            <Link
-              href="/login"
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25"
-            >
-              Get Started
-            </Link>
-          </div>
+    <div className="dm-bg-grid" style={{ minHeight: '100vh', background: 'var(--surf-0)', color: 'var(--txt-1)' }}>
+      {/* Nav */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 30,
+        background: 'rgba(3,7,17,0.85)', backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid var(--border-0)',
+        padding: '0 24px', height: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 30, height: 30, background: 'var(--cyan)', borderRadius: 7,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0a0a0a',
+          }}>DM</div>
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>DevMetrics AI</span>
+        </div>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link href="/login" className="dm-btn" style={{ fontSize: 12 }}>Sign in</Link>
+          <a href="mailto:hello@devmetrics.ai?subject=Custom%20quote" className="dm-btn dm-btn-cyan" style={{ fontSize: 12 }}>Talk to us</a>
         </nav>
+      </header>
 
-        {/* Hero Section */}
-        <div className="text-center mb-24 animate-fade-in">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 mb-8">
-            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-            <span className="text-sm text-slate-300">AI-Powered Analytics Platform</span>
+      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px' }}>
+        {/* Hero */}
+        <section style={{ textAlign: 'center', padding: '96px 0 72px' }} className="fade-up">
+          <div className="dm-tag" style={{
+            background: 'var(--cyan-dim)', color: 'var(--cyan)',
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
+            marginBottom: 24, fontSize: 10,
+          }}>
+            AI-Powered Engineering Intelligence
           </div>
-
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            Engineering Intelligence
+          <h1 className="dm-hero-h1" style={{ fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 20 }}>
+            Stop flying blind on
             <br />
-            <span className="gradient-text">Reimagined</span>
+            who&apos;s actually driving impact.
           </h1>
-
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10">
-            Understand developer productivity beyond lines of code. AI-powered insights
-            that measure real impact, complexity, and collaboration.
+          <p style={{ fontSize: 18, color: 'var(--txt-2)', maxWidth: 620, margin: '0 auto 36px', lineHeight: 1.6 }}>
+            DevMetrics AI turns GitHub, Jira, and Slack activity into role-aware, AI-scored
+            visibility — so managers can make decisions with real signal, and teams can learn
+            from what&apos;s actually working.
           </p>
-
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href="/login"
-              className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-semibold text-lg transition-all shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50"
-            >
-              Start Analyzing
-            </Link>
-            <Link
-              href="/login"
-              className="px-8 py-4 bg-slate-800/50 hover:bg-slate-700/50 text-white rounded-xl font-semibold text-lg border border-slate-700/50 transition-all"
-            >
-              Learn More
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="mailto:hello@devmetrics.ai?subject=Custom%20quote" className="dm-btn dm-btn-cyan" style={{ fontSize: 14, padding: '12px 22px' }}>
+              Get a custom quote
+            </a>
+            <Link href="/register" className="dm-btn" style={{ fontSize: 14, padding: '12px 22px' }}>
+              Try it yourself
             </Link>
           </div>
-        </div>
+        </section>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-24 animate-slide-up">
-          <div className="group p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 hover:border-blue-500/50 transition-all hover:shadow-xl hover:shadow-blue-500/10">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
+        {/* Features */}
+        <section className="dm-grid-2 fade-up" style={{ marginBottom: 72 }}>
+          {FEATURES.map(f => (
+            <div key={f.title} className="dm-card" style={{ padding: '24px 26px' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: f.accent, marginBottom: 16 }} />
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, letterSpacing: '-0.01em' }}>{f.title}</h3>
+              <p style={{ fontSize: 13, color: 'var(--txt-2)', lineHeight: 1.6 }}>{f.desc}</p>
             </div>
-            <h3 className="text-xl font-semibold text-white mb-3">AI-Powered Analysis</h3>
-            <p className="text-slate-400">
-              GPT-4 and Claude analyze code complexity, work patterns, and impact - far beyond simple metrics.
-            </p>
-          </div>
+          ))}
+        </section>
 
-          <div className="group p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 hover:border-cyan-500/50 transition-all hover:shadow-xl hover:shadow-cyan-500/10">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg className="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-3">Multi-Dimensional Scoring</h3>
-            <p className="text-slate-400">
-              Role-based evaluation covering code quality, complexity, velocity, impact, and mentoring.
-            </p>
-          </div>
+        {/* Transparency callout */}
+        <section className="dm-card fade-up" style={{ padding: '32px 36px', marginBottom: 72, textAlign: 'center' }}>
+          <div className="dm-label" style={{ marginBottom: 10 }}>Built on trust, not surveillance</div>
+          <p style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.5, maxWidth: 640, margin: '0 auto', letterSpacing: '-0.01em' }}>
+            Developers see the exact same scores and insights their managers do.
+            <span style={{ color: 'var(--txt-2)', fontWeight: 400 }}> No hidden dashboards, no backroom scorekeeping — visibility that runs in both directions.</span>
+          </p>
+        </section>
 
-          <div className="group p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 hover:border-emerald-500/50 transition-all hover:shadow-xl hover:shadow-emerald-500/10">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-3">Seamless Integrations</h3>
-            <p className="text-slate-400">
-              Connect GitHub and Jira in minutes. Unified view of all engineering work.
-            </p>
-          </div>
-        </div>
-
-        {/* How It Works Section */}
-        <div className="max-w-3xl mx-auto animate-slide-up">
-          <div className="p-8 rounded-2xl bg-slate-800/30 border border-slate-700/50 backdrop-blur-sm">
-            <h2 className="text-2xl font-bold text-white mb-6 text-center">How It Works</h2>
-
-            <div className="space-y-4 mb-8">
-              {[
-                { step: '1', title: 'Connect Your Tools', desc: 'Link your GitHub and Jira accounts securely' },
-                { step: '2', title: 'Sync Your Data', desc: 'Pull commits, PRs, and tickets automatically' },
-                { step: '3', title: 'AI Analysis', desc: 'Our AI analyzes complexity, impact, and patterns' },
-                { step: '4', title: 'Get Insights', desc: 'View personalized scores and recommendations' },
-              ].map((item) => (
-                <div key={item.step} className="flex items-start gap-4 p-4 rounded-xl bg-slate-900/50 border border-slate-700/30">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center shrink-0">
-                    <span className="text-blue-400 font-bold">{item.step}</span>
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">{item.title}</h3>
-                    <p className="text-slate-400 text-sm">{item.desc}</p>
-                  </div>
+        {/* How it works */}
+        <section style={{ marginBottom: 72 }} className="fade-up">
+          <h2 style={{ fontSize: 24, fontWeight: 700, textAlign: 'center', marginBottom: 28, letterSpacing: '-0.01em' }}>How it works</h2>
+          <div className="dm-grid-4">
+            {STEPS.map(s => (
+              <div key={s.step} className="dm-card" style={{ padding: '20px 18px' }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7, background: 'var(--cyan-dim)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+                }}>
+                  <span className="mono" style={{ color: 'var(--cyan)', fontWeight: 700, fontSize: 12 }}>{s.step}</span>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <Link
-                href="/login"
-                className="flex-1 md:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium text-center transition-all"
-              >
-                Get Started Free
-              </Link>
-              <Link
-                href="/login"
-                className="flex-1 md:flex-none px-6 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-white rounded-xl font-medium text-center transition-all border border-slate-600/50"
-              >
-                Sign In
-              </Link>
-            </div>
+                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{s.title}</h3>
+                <p style={{ fontSize: 12, color: 'var(--txt-3)', lineHeight: 1.5 }}>{s.desc}</p>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {/* Footer */}
-        <footer className="mt-24 text-center">
-          <p className="text-slate-500">
-            DevMetrics AI - Engineering Intelligence Platform
+        {/* Roadmap teaser */}
+        <section style={{ marginBottom: 72 }} className="fade-up">
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>What&apos;s next</h2>
+            <span className="dm-label" style={{ marginBottom: 0 }}>Roadmap</span>
+          </div>
+          <div className="dm-grid-3">
+            {ROADMAP.map(r => (
+              <div key={r.title} className="dm-card" style={{ padding: '18px 20px', borderStyle: 'dashed' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--txt-2)' }}>{r.title}</h3>
+                <p style={{ fontSize: 12, color: 'var(--txt-3)', lineHeight: 1.5 }}>{r.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Closing CTA */}
+        <section className="dm-card fade-up" style={{
+          padding: '44px 36px', marginBottom: 56, textAlign: 'center',
+          background: 'linear-gradient(180deg, var(--surf-1), var(--surf-2))',
+        }}>
+          <h2 style={{ fontSize: 26, fontWeight: 700, marginBottom: 10, letterSpacing: '-0.01em' }}>
+            Every org measures engineering differently
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--txt-2)', maxWidth: 480, margin: '0 auto 24px', lineHeight: 1.6 }}>
+            We deploy DevMetrics AI inside your own environment and tune it to how your
+            team actually works. Tell us about your setup and we&apos;ll put together a quote.
           </p>
+          <a href="mailto:hello@devmetrics.ai?subject=Custom%20quote" className="dm-btn dm-btn-cyan" style={{ fontSize: 14, padding: '12px 24px' }}>
+            Request a custom quote
+          </a>
+        </section>
+
+        <footer style={{ textAlign: 'center', padding: '0 0 48px' }}>
+          <p style={{ fontSize: 12, color: 'var(--txt-3)' }}>DevMetrics AI — Engineering Intelligence Platform</p>
         </footer>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

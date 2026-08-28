@@ -255,6 +255,39 @@
   }
 }
 
+/* Responsive grids for marketing/landing-style layouts */
+.dm-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.dm-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.dm-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .dm-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .dm-grid-2,
+  .dm-grid-3,
+  .dm-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dm-hero-h1 {
+  font-size: clamp(32px, 6vw, 52px);
+}
+
 .fade-up {
   animation: slide-up 0.4s ease-out;
 }
