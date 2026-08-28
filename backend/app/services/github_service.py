@@ -185,7 +185,7 @@ class GitHubService:
                             additions=commit.stats.additions if commit.stats else 0,
                             deletions=commit.stats.deletions if commit.stats else 0,
                             committed_at=commit.commit.author.date,
-                            analyzed=False,
+                            analyzed=0,
                         )
 
                         db.add(git_commit)
@@ -286,7 +286,7 @@ class GitHubService:
                             updated_at=pr.updated_at,
                             merged_at=pr.merged_at,
                             closed_at=pr.closed_at,
-                            analyzed=False,
+                            analyzed=0,
                         )
 
                         db.add(pull_request)

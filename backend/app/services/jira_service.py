@@ -17,6 +17,28 @@ from app.utils.security import decrypt_secret
 logger = logging.getLogger(__name__)
 
 
+def _adf_to_text(node: Any) -> str:
+    """Flatten an Atlassian Document Format node into plain text.
+
+    Jira Cloud's v3 API (which `enhanced_jql`/`.issue()` now return, since
+    the old v2 search endpoint was removed) represents rich-text fields like
+    `description` and comment `body` as a nested ADF document rather than a
+    plain string — inserting that dict directly into a Text column fails.
+    """
+    if node is None:
+        return ""
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, dict):
+        return ""
+    if node.get("type") == "text":
+        return node.get("text", "")
+    text = "".join(_adf_to_text(child) for child in node.get("content") or [])
+    if node.get("type") in ("paragraph", "heading", "codeBlock", "blockquote"):
+        text += "\n"
+    return text
+
+
 class JiraService:
     """Service for interacting with Jira API"""
 
@@ -30,7 +52,7 @@ class JiraService:
             api_token: Jira API token
         """
         self.client = Jira(url=url, username=username, password=api_token, cloud=True)
-        self.url = url
+        self.url = url.rstrip("/")
         self.username = username
 
     @classmethod
@@ -133,15 +155,20 @@ class JiraService:
             jql = " AND ".join(jql_parts)
             logger.info(f"JQL Query: {jql}")
 
-            # Execute search
+            # Execute search. Jira Cloud removed the offset-paginated
+            # /rest/api/2/search endpoint (`.jql()` in this client library) —
+            # `.enhanced_jql()` calls its /rest/api/3/search/jql replacement,
+            # which pages via an opaque nextPageToken instead of start/total.
             tickets_synced = 0
-            start_at = 0
             max_results = 50
+            next_page_token = None
 
             while True:
-                # Use the v3 API endpoint as the old one is deprecated
-                response = self.client.jql(
-                    jql, start=start_at, limit=max_results, fields="*all"
+                response = self.client.enhanced_jql(
+                    jql,
+                    fields="*all",
+                    limit=max_results,
+                    nextPageToken=next_page_token,
                 )
 
                 issues = response.get("issues", [])
@@ -181,6 +208,7 @@ class JiraService:
 
                     # Get labels
                     labels = fields.get("labels", [])
+                    description = _adf_to_text(fields.get("description")).strip()
 
                     # Parse dates
                     created_at = self._parse_jira_date(fields.get("created"))
@@ -190,7 +218,7 @@ class JiraService:
                     if existing:
                         # Update existing ticket
                         existing.title = fields.get("summary", "")
-                        existing.description = fields.get("description", "")
+                        existing.description = description
                         existing.status = status
                         existing.ticket_type = issue_type
                         existing.priority = priority
@@ -205,7 +233,7 @@ class JiraService:
                             developer_id=developer.id,
                             ticket_key=ticket_key,
                             title=fields.get("summary", ""),
-                            description=fields.get("description", ""),
+                            description=description,
                             status=status,
                             ticket_type=issue_type,
                             priority=priority,
@@ -216,16 +244,15 @@ class JiraService:
                             created_at=created_at,
                             updated_at=updated_at,
                             resolved_at=resolved_at,
-                            analyzed=False,
+                            analyzed=0,
                         )
                         db.add(jira_ticket)
                         tickets_synced += 1
 
                 # Check if there are more results
-                total = response.get("total", 0)
-                start_at += max_results
-                if start_at >= total:
+                if response.get("isLast", True) or not response.get("nextPageToken"):
                     break
+                next_page_token = response["nextPageToken"]
 
             db.commit()
             logger.info(
@@ -280,10 +307,9 @@ class JiraService:
                     ticket_id=ticket.id,
                     developer_id=developer.id,
                     comment_id=comment_id,
-                    comment_text=comment.get("body", ""),
+                    comment_text=_adf_to_text(comment.get("body")).strip(),
                     created_at=self._parse_jira_date(comment.get("created")),
                     updated_at=self._parse_jira_date(comment.get("updated")),
-                    analyzed=False,
                 )
 
                 db.add(jira_comment)
@@ -383,7 +409,7 @@ class JiraService:
             return {
                 "key": issue["key"],
                 "summary": fields.get("summary"),
-                "description": fields.get("description"),
+                "description": _adf_to_text(fields.get("description")).strip(),
                 "status": fields.get("status", {}).get("name"),
                 "type": fields.get("issuetype", {}).get("name"),
                 "priority": fields.get("priority", {}).get("name"),

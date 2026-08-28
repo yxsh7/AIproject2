@@ -27,7 +27,7 @@ PyGithub==2.1.1
 GitPython==3.1.41
 
 # Jira Integration
-atlassian-python-api==3.41.4
+atlassian-python-api==5.0.3
 
 # Slack Integration
 slack_sdk==3.27.2
