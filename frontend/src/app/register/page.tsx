@@ -106,8 +106,8 @@ export default function RegisterPage() {
                   disabled={isLoading}
                   style={{
                     flex: 1, padding: '8px 0', borderRadius: 7, cursor: 'pointer',
-                    border: formData.mode === opt.value ? '1px solid rgba(129,140,248,0.35)' : '1px solid var(--border-1)',
-                    background: formData.mode === opt.value ? 'rgba(129,140,248,0.08)' : 'transparent',
+                    border: formData.mode === opt.value ? '1px solid rgba(122,156,198,0.35)' : '1px solid var(--border-1)',
+                    background: formData.mode === opt.value ? 'rgba(122,156,198,0.08)' : 'transparent',
                     color: formData.mode === opt.value ? 'var(--cyan)' : 'var(--txt-3)',
                     fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: formData.mode === opt.value ? 500 : 400,
                     transition: 'all 0.12s',
@@ -175,7 +175,7 @@ export default function RegisterPage() {
             disabled={isLoading}
             style={{
               width: '100%',
-              background: isLoading ? 'rgba(129,140,248,0.06)' : 'var(--cyan)',
+              background: isLoading ? 'rgba(122,156,198,0.06)' : 'var(--cyan)',
               color: isLoading ? 'var(--txt-3)' : '#0a0a0a',
               border: 'none', borderRadius: 8,
               padding: '11px 0', fontSize: 13, fontWeight: 600,

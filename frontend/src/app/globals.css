@@ -125,11 +125,9 @@
 
 /* ── "dm-*" design system ──────────────────────────────────────────────────
    Used by the register, superadmin, manager, integrations, and settings
-   pages (plus components/ui/form-field.tsx). Values below match the literal
-   colors already hardcoded as siblings to each var() throughout those
-   files — e.g. --red pairs with rgba(248,113,113,...) everywhere it's used,
-   --cyan pairs with rgba(129,140,248,...) (an indigo, despite the name —
-   kept as-is to match the app's established accent color). */
+   pages (plus components/ui/form-field.tsx). --cyan is the brand accent —
+   deliberately a muted steel blue rather than the indigo/violet almost
+   every AI-product template defaults to. */
 :root {
   --surf-0: #030711;
   --surf-1: #0d1220;
@@ -142,8 +140,8 @@
   --border-0: rgba(148, 163, 184, 0.08);
   --border-1: rgba(148, 163, 184, 0.16);
 
-  --cyan: #818cf8;
-  --cyan-dim: rgba(129, 140, 248, 0.1);
+  --cyan: #7a9cc6;
+  --cyan-dim: rgba(122, 156, 198, 0.1);
 
   --red: #f87171;
   --red-dim: rgba(248, 113, 113, 0.1);
@@ -304,7 +302,7 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(560px circle at 50% 0%, rgba(129, 140, 248, 0.16), transparent 60%),
+    radial-gradient(560px circle at 50% 0%, rgba(122, 156, 198, 0.16), transparent 60%),
     radial-gradient(420px circle at 85% 15%, rgba(74, 222, 128, 0.06), transparent 60%);
 }
 
@@ -313,8 +311,8 @@
 }
 .dm-card-hover:hover {
   transform: translateY(-2px);
-  border-color: rgba(129, 140, 248, 0.35);
-  box-shadow: 0 12px 32px -12px rgba(129, 140, 248, 0.25);
+  border-color: rgba(122, 156, 198, 0.35);
+  box-shadow: 0 12px 32px -12px rgba(122, 156, 198, 0.25);
 }
 
 .dm-stat-num {
@@ -330,7 +328,7 @@
   border: 1px solid var(--border-1);
   border-radius: 12px;
   background: var(--surf-1);
-  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(129, 140, 248, 0.06);
+  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(122, 156, 198, 0.06);
   overflow: hidden;
 }
 .dm-browser-frame-bar {

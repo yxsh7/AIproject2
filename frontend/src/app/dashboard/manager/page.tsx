@@ -26,7 +26,7 @@ interface DevPanel {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function roleBadge(level: string) {
   const l = level?.toLowerCase();
-  const color = (l === 'senior' || l === 'staff' || l === 'principal') ? '#818cf8'
+  const color = (l === 'senior' || l === 'staff' || l === 'principal') ? '#7a9cc6'
     : l === 'mid' ? '#f59e0b' : '#52525b';
   return (
     <span style={{
@@ -90,7 +90,7 @@ function DevDetailPanel({
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 40, height: 40, borderRadius: 8,
-              background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.2)',
+              background: 'rgba(122,156,198,0.1)', border: '1px solid rgba(122,156,198,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 14, fontWeight: 700, color: 'var(--cyan)',
               fontFamily: 'var(--font-body)', flexShrink: 0,
@@ -205,9 +205,9 @@ function DevDetailPanel({
                 </div>
                 {ins.insights.slice(0, 4).map((insight, i) => (
                   <div key={i} style={{
-                    borderLeft: '2px solid rgba(129,140,248,0.4)',
+                    borderLeft: '2px solid rgba(122,156,198,0.4)',
                     padding: '10px 14px', marginBottom: 8,
-                    background: 'rgba(129,140,248,0.04)',
+                    background: 'rgba(122,156,198,0.04)',
                     borderRadius: '0 7px 7px 0',
                   }}>
                     <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--txt-1)', marginBottom: 4 }}>{insight.title}</div>

@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
 export function scoreCol(v: number, max100 = false): string {
   const pct = max100 ? v : v * 10;
   if (pct >= 80) return '#4ade80';
-  if (pct >= 60) return '#818cf8';
+  if (pct >= 60) return '#7a9cc6';
   if (pct >= 40) return '#f59e0b';
   return '#f87171';
 }
