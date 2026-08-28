@@ -285,7 +285,7 @@
 }
 
 .dm-hero-h1 {
-  font-size: clamp(32px, 6vw, 52px);
+  font-size: clamp(34px, 6vw, 60px);
 }
 
 .fade-up {
@@ -294,4 +294,70 @@
 
 .mono {
   font-family: var(--font-mono);
+}
+
+/* ── Marketing-page-only extras ─────────────────────────────────────────── */
+
+.dm-hero-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(560px circle at 50% 0%, rgba(129, 140, 248, 0.16), transparent 60%),
+    radial-gradient(420px circle at 85% 15%, rgba(74, 222, 128, 0.06), transparent 60%);
+}
+
+.dm-card-hover {
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.dm-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 0.35);
+  box-shadow: 0 12px 32px -12px rgba(129, 140, 248, 0.25);
+}
+
+.dm-stat-num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Stylized browser-chrome frame for the hero product mockup */
+.dm-browser-frame {
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  background: var(--surf-1);
+  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(129, 140, 248, 0.06);
+  overflow: hidden;
+}
+.dm-browser-frame-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-0);
+  background: var(--surf-2);
+}
+.dm-browser-frame-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-1);
+}
+
+.dm-integration-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  opacity: 0.6;
+}
+.dm-integration-row svg {
+  height: 22px;
+  width: auto;
+  color: var(--txt-2);
 }
