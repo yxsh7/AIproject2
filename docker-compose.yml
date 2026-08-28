@@ -32,6 +32,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot migration runner. backend and celery-worker both need the schema
+  # in place before they start, but running `alembic upgrade head` from each
+  # of them independently races them against each other creating the
+  # alembic_version table on a fresh database — the loser crashes. Running it
+  # once here, with the other two gated on its clean exit, avoids that.
+  migrate:
+    build: ./backend
+    command: alembic upgrade head
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: postgresql://devmetrics:devmetrics123@postgres:5432/devmetrics
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     build: ./backend
     env_file:
@@ -44,8 +60,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -60,8 +76,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
