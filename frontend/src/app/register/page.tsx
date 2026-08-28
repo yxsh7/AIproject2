@@ -40,7 +40,11 @@ export default function RegisterPage() {
       setLocalError('Invite code is required'); return;
     }
     try {
-      await register(formData);
+      await register({
+        ...formData,
+        organization_name: formData.mode === 'create_org' ? formData.organization_name : undefined,
+        invite_code: formData.mode === 'join_org' ? formData.invite_code : undefined,
+      });
       router.push('/dashboard');
     } catch (err) {
       console.error('Registration failed:', err);

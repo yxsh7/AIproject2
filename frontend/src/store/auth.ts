@@ -91,8 +91,10 @@ export const useAuthStore = create<AuthState>()(
           set({ user: response.data, isLoading: false });
         } catch (error: any) {
           set({ error: 'Failed to fetch user data', isLoading: false });
-          // If token is invalid, logout
-          if (error.response?.status === 401) {
+          // 401 = invalid/expired token, 403 = valid token but access denied
+          // (e.g. organization suspended) — either way the token is now
+          // useless, so drop it rather than leaving it stuck in storage.
+          if (error.response?.status === 401 || error.response?.status === 403) {
             get().logout();
           }
           throw error;
