@@ -91,10 +91,13 @@ export const useAuthStore = create<AuthState>()(
           set({ user: response.data, isLoading: false });
         } catch (error: any) {
           set({ error: 'Failed to fetch user data', isLoading: false });
-          // 401 = invalid/expired token, 403 = valid token but access denied
-          // (e.g. organization suspended) — either way the token is now
-          // useless, so drop it rather than leaving it stuck in storage.
-          if (error.response?.status === 401 || error.response?.status === 403) {
+          // The backend uses three different codes for "this token no longer
+          // grants access": 401 (invalid/expired token), 400 (user
+          // deactivated), 403 (organization suspended). All three mean the
+          // token is now useless, so drop it rather than leaving it stuck in
+          // storage.
+          const status = error.response?.status;
+          if (status === 400 || status === 401 || status === 403) {
             get().logout();
           }
           throw error;
