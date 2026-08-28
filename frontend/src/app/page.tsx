@@ -26,7 +26,54 @@ const ROADMAP = [
   { title: 'Mentoring network view', desc: 'Who reviews whom — how knowledge actually moves' },
   { title: '1:1 talking points', desc: 'Auto-generated from recent insights, before you walk in' },
   { title: 'Custom scoring weights', desc: 'Define what "impact" means for your team' },
+  { title: 'Linear, GitLab, Notion', desc: 'Expanding integration coverage beyond GitHub, Jira, and Slack' },
+  { title: 'SSO / SAML', desc: 'Enterprise identity, built for the custom-deploy model' },
+  { title: 'Attrition risk modeling', desc: 'Earlier signal than a burnout flag — trend-based, not reactive' },
 ];
+
+function GitHubLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
+      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+    </svg>
+  );
+}
+
+function JiraLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-label="Jira">
+      <path d="M4 4h16l-8 7z" opacity="0.45" />
+      <path d="M4 11h16l-8 7z" opacity="0.7" />
+      <path d="M4 18h16l-8 5z" />
+    </svg>
+  );
+}
+
+function SlackLogo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-label="Slack">
+      <rect x="8" y="1" width="3.2" height="9" rx="1.6" />
+      <rect x="14" y="8" width="9" height="3.2" rx="1.6" />
+      <rect x="12.8" y="14" width="3.2" height="9" rx="1.6" />
+      <rect x="1" y="12.8" width="9" height="3.2" rx="1.6" />
+    </svg>
+  );
+}
+
+function ProductMark({ size = 30 }: { size?: number }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.23, background: 'var(--cyan)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      <svg width={size * 0.52} height={size * 0.52} viewBox="0 0 16 16" fill="#0a0a0a">
+        <rect x="0.5" y="8" width="3" height="7.5" rx="1" />
+        <rect x="6.5" y="4" width="3" height="11.5" rx="1" />
+        <rect x="12.5" y="0.5" width="3" height="15" rx="1" />
+      </svg>
+    </div>
+  );
+}
 
 function MiniBar({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -143,11 +190,7 @@ export default function Home() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 30, height: 30, background: 'var(--cyan)', borderRadius: 7,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0a0a0a',
-          }}>DM</div>
+          <ProductMark />
           <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>DevMetrics AI</span>
         </div>
         <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -209,9 +252,9 @@ export default function Home() {
         <section style={{ marginBottom: 88 }} className="fade-up">
           <div className="dm-label" style={{ textAlign: 'center', marginBottom: 16 }}>Works with the tools you already use</div>
           <div className="dm-integration-row">
-            {['GitHub', 'Jira', 'Slack'].map(name => (
-              <span key={name} className="mono" style={{ fontSize: 15, fontWeight: 600, color: 'var(--txt-2)' }}>{name}</span>
-            ))}
+            <GitHubLogo />
+            <JiraLogo />
+            <SlackLogo />
           </div>
         </section>
 
